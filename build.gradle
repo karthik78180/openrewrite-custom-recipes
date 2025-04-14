@@ -1,0 +1,43 @@
+plugins {
+    id 'java'
+    id 'maven-publish'
+}
+
+group = 'com.rewrite'
+version = '1.0.0'
+
+repositories {
+    mavenCentral()
+}
+
+sourceCompatibility = JavaVersion.VERSION_21
+
+dependencies {
+    implementation platform("org.openrewrite:rewrite-bom:8.23.1")
+    implementation "org.openrewrite:rewrite-java"
+
+    testImplementation "org.openrewrite:rewrite-test"
+    testImplementation "org.junit.jupiter:junit-jupiter-api:5.9.2"
+    testRuntimeOnly "org.junit.jupiter:junit-jupiter-engine:5.9.2"
+    testImplementation("org.openrewrite:rewrite-java-21")
+    testImplementation 'org.assertj:assertj-core:3.24.2'
+
+
+}
+
+// Publish to local Maven repository (~/.m2)
+publishing {
+    publications {
+        mavenJava(MavenPublication) {
+            from components.java
+        }
+    }
+    repositories {
+        mavenLocal()
+    }
+}
+
+test {
+    useJUnitPlatform()
+}
+
