@@ -21,19 +21,45 @@ class VehicleToCarRecipeTest implements RewriteTest {
         rewriteRun(
                 java(
                         """
-                        package com.example;
-            
-                        public class Vehicle {}
-                        public class Car {}
-                        public class MyVehicle extends Vehicle {}
-                        """,
+                                package com.example;
+                                
+                                public class Vehicle {}
+                                public class Car {}
+                                public class MyVehicle extends Vehicle {}
+                                """,
                         """
-                        package com.example;
-            
-                        public class Vehicle {}
-                        public class Car {}
-                        public class MyVehicle extends Car {}
+                                package com.example;
+                                
+                                public class Vehicle {}
+                                public class Car {}
+                                public class MyVehicle extends Car {}
+                                """
+                )
+        );
+    }
+
+    @Test
+    void classExtendingGenericVehicleWithUndeclaredXIsUpdated() {
+        rewriteRun(
+                java(
                         """
+                                package com.example;
+                                
+                                class X {}
+                                
+                                public class Vehicle<T> {}
+                                public class Car<T> {}
+                                public class MyVehicle extends Vehicle<X> {}
+                                """,
+                        """
+                                package com.example;
+                                
+                                class X {}
+                                
+                                public class Vehicle<T> {}
+                                public class Car<T> {}
+                                public class MyVehicle extends Car<X> {}
+                                """
                 )
         );
     }
@@ -43,11 +69,11 @@ class VehicleToCarRecipeTest implements RewriteTest {
     void classNotExtendingVehicleUnchanged() {
         rewriteRun(
                 java(
-                """
-                package com.example;
-                public class NoVehicle {}
-                """
-            )
+                        """
+                                package com.example;
+                                public class NoVehicle {}
+                                """
+                )
         );
     }
 

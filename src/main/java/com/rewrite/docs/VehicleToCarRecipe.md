@@ -1,37 +1,35 @@
 # VehicleToCarRecipe
 
-This OpenRewrite recipe updates all Java classes that extend `Vehicle` to instead extend `Car`.
+This OpenRewrite recipe updates all Java classes that extend `Vehicle` (with or without generics) to extend `Car` instead.
 
-## Features
+---
+
+## ✅ Features
 
 - Replaces `extends Vehicle` with `extends Car`
-- Updates imports accordingly
-- Handles inner classes as well
-- Avoids deprecated or removed OpenRewrite APIs (compatible with OpenRewrite 8.23.1)
+- Supports `Vehicle<T>` → `Car<T>` (preserves generic type parameters)
+- Handles both raw and parameterized superclasses
+- Adjusts import statements accordingly
+- Uses OpenRewrite 8.23.1-compatible APIs
 
-## Use Case
+---
 
-Suppose you are migrating your codebase where the superclass `Vehicle` is deprecated and should be replaced by `Car`. This recipe helps automate that change across all Java source files.
+## 📌 Use Case
 
-## How It Works
+Suppose you're deprecating the `Vehicle` class in favor of `Car`, and you want to migrate all classes across your codebase automatically. This recipe does that with AST-safe transformations.
 
-1. **Parses a temporary Java snippet** (`class Temp extends Car {}`) to create a reusable `Car` type reference.
-2. **Traverses all class declarations** using `JavaIsoVisitor`.
-3. **Checks if the class extends `Vehicle`**.
-4. **Replaces the superclass** with `Car` and adjusts imports.
+---
 
+## ⚙️ How It Works
 
-## Key Features
-- 🚀 AST-based transformation
-- 📦 Import statement management
-- 🐛 Debug logging
+1. Traverses all class declarations using `JavaIsoVisitor`.
+2. Identifies if the class directly extends `Vehicle` or `Vehicle<T>`.
+3. Replaces the superclass with `Car` (preserving type parameters when present).
+4. Adds/removes imports as necessary.
 
-## Requirements
+---
 
-- Java 17+
-- OpenRewrite version: 8.23.1 or compatible
-
-## Usage
+## 🧩 Usage
 
 To use this recipe in a rewrite project:
 
