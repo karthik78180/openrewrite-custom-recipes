@@ -1,0 +1,18 @@
+type: specs.openrewrite.org/v1beta/recipe
+name: com.mycompany.gradle.MigrateGradleSetup
+displayName: Migrate Gradle Wrapper and Dependencies
+description: Updates Gradle wrapper and selected dependency versions
+
+recipeList:
+  - org.openrewrite.gradle.UpdateGradleWrapper:
+      version: "8.13"
+  - org.openrewrite.gradle.ChangeDependencyVersion:
+      groupId: com.fasterxml.jackson.core
+      artifactId: jackson-databind
+      newVersion: "2.15.0"
+      regex: false
+  - org.openrewrite.gradle.ChangeDependencyVersion:
+      groupId: org.apache.commons
+      artifactId: commons-lang3
+      newVersion: "3.13.0"
+      regex: false

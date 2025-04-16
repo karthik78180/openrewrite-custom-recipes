@@ -13,7 +13,7 @@ repositories {
 sourceCompatibility = JavaVersion.VERSION_21
 
 dependencies {
-    implementation platform("org.openrewrite:rewrite-bom:8.23.1")
+    implementation platform("org.openrewrite:rewrite-bom:8.50.2")
     implementation "org.openrewrite:rewrite-java"
 
     testImplementation "org.openrewrite:rewrite-test"
@@ -22,6 +22,8 @@ dependencies {
     testImplementation("org.openrewrite:rewrite-java-21")
     testImplementation 'org.assertj:assertj-core:3.24.2'
 
+    testImplementation("org.openrewrite:rewrite-gradle")
+    testImplementation("org.openrewrite:rewrite-gradle-testing")
 
 }
 

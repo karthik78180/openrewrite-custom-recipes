@@ -24,7 +24,8 @@ public class Java21MigrationRecipes extends Recipe {
         return List.of(
                 new VehicleToCarRecipe(),
                 new ChangeConstantReference(),
-                new ChangeConstantsReference()
+                new ChangeConstantsReference(),
+                new GradleMigrationYamlRecipe()
         );
     }
 }
