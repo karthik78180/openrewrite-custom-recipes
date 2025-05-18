@@ -1,0 +1,15 @@
+---
+type: specs.openrewrite.org/v1beta/recipe
+name: com.example.CompositeMigration
+displayName: Upgrade Gradle to 8.14 and Apply Custom Recipes
+description: Upgrades Gradle to version 8.14 and applies custom recipes for code modernization.
+recipeList:
+  - org.openrewrite.gradle.UpdateGradleWrapper:
+      version: "8.13"
+      distributionUrl: "https://services.gradle.org/distributions/gradle-8.13-bin.zip"
+      distributionSha256Sum: "20f1b1176237254a6fc204d8434196fa11a4cfb387567519c61556e8710aed78"
+      distributionType: "bin"
+      archivePathPattern: "wrapper/dists"
+  - com.rewrite.VehicleToCarRecipe
+  - com.rewrite.Java21MigrationRecipes
+  - com.rewrite.ChangeConstantsReference
