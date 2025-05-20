@@ -4,6 +4,10 @@ name: com.example.CompositeMigration
 displayName: Upgrade Gradle to 8.14 and Apply Custom Recipes
 description: Upgrades Gradle to version 8.14 and applies custom recipes for code modernization.
 recipeList:
+#  - org.openrewrite.java.spring.ChangeMethodParameter:
+#      methodPattern: com.yourorg.A foo(int, int)
+#      parameterType: java.lang.String
+#      parameterIndex: 0
   - org.openrewrite.gradle.UpdateGradleWrapper:
       version: "8.13"
       distributionUrl: "https://services.gradle.org/distributions/gradle-8.13-bin.zip"
@@ -13,3 +17,19 @@ recipeList:
   - com.rewrite.VehicleToCarRecipe
   - com.rewrite.Java21MigrationRecipes
   - com.rewrite.ChangeConstantsReference
+  - org.openrewrite.java.AddMethodParameter:
+        methodPattern: '* start(io.vertx.core.Promise)'
+        parameterType: 'Structured'
+        parameterName: 'structured'
+        parameterValue: 'null'
+  # Step 1: Change the first parameter from io.vertx.core.Promise<T> to List<?>
+#  - org.openrewrite.java.ChangeMethodParameterType:
+#      methodPattern: "* start(io.vertx.core.Promise)"
+#      parameterIndex: 0
+#      parameterType: "java.util.List"
+  # Step 2: Add a second parameter of type String
+#  - org.openrewrite.java.AddMethodParameter:
+#      methodPattern: "* start(java.util.List)"  # Matches after the above change
+#      parameterType: "java.lang.String"
+#      parameterName: "description"
+#      parameterIndex: 1
