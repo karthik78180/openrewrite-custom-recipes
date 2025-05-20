@@ -81,4 +81,45 @@ class CompositeMigrationTest implements RewriteTest {
                 )
         );
     }
+
+    @Test
+    void testCompositeIncludesAddStructured2() {
+        rewriteRun(
+                java(
+                        """
+                        package io.vertx.core;
+        
+                        public interface Promise<T> {
+                        }
+                        """
+                ),
+                // Mock Structured class
+                java(
+                        """
+                        public class Structured {
+                        }
+                        """
+                ),
+                java(
+                        """
+                        import io.vertx.core.Promise;
+        
+                        public class MyVerticle {
+                            public void start(Promise<Void> init) {
+                                System.out.println("Init called");
+                            }
+                        }
+                        """,
+                        """
+                        import io.vertx.core.Promise;
+        
+                        public class MyVerticle {
+                            public void start(Promise<Void> init, Structured structured) {
+                                System.out.println("Init called");
+                            }
+                        }
+                        """
+                )
+        );
+    }
 }
