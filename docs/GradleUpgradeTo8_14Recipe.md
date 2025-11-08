@@ -77,7 +77,7 @@ Add to your `build.gradle`:
 
 ```gradle
 plugins {
-    id 'org.openrewrite.rewrite' version '6.25.0'
+    id 'org.openrewrite.rewrite' version '7.16.0'
 }
 
 repositories {

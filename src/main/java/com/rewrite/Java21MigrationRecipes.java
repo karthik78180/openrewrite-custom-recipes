@@ -6,17 +6,24 @@ import org.openrewrite.Recipe;
 import java.util.List;
 
 /**
- * Composite recipe containing all migration rules
+ * Composite recipe containing all migration rules.
+ *
+ * This recipe combines multiple migration recipes into a single execution:
+ * - Base class transformations (Vehicle to Car)
+ * - Constant reference updates
+ * - Vert.x JDBC client migration (3.9.16 to 5.0.5):
+ *   - API changes from JDBCClient to JDBCPool
+ *   - Import statement updates (handled via rewrite.yml as com.rewrite.VertxJdbcImportMigration)
  */
 public class Java21MigrationRecipes extends Recipe {
     @Override
     public @NotNull String getDisplayName() {
-        return "Composite: Change base classes";
+        return "Composite: All migration recipes";
     }
 
     @Override
     public @NotNull String getDescription() {
-        return "Runs all base class migration rules as a composite recipe.";
+        return "Runs all migration recipes including base class changes, constant updates, and Vert.x JDBC migration.";
     }
 
     @Override
@@ -24,7 +31,8 @@ public class Java21MigrationRecipes extends Recipe {
         return List.of(
                 new VehicleToCarRecipe(),
                 new ChangeConstantReference(),
-                new ChangeConstantsReference()
+                new ChangeConstantsReference(),
+                new VertxJdbcClientToPoolRecipe()
         );
     }
 }

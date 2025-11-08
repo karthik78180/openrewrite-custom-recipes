@@ -13,3 +13,39 @@ recipeList:
   - com.rewrite.VehicleToCarRecipe
   - com.rewrite.Java21MigrationRecipes
   - com.rewrite.ChangeConstantsReference
+---
+type: specs.openrewrite.org/v1beta/recipe
+name: com.rewrite.VertxJdbcMigration
+displayName: Migrate Vert.x JDBC from 3.9.16 to 5.0.5
+description: Comprehensive migration of Vert.x JDBC client from version 3.9.16 to 5.0.5, including dependency updates and API changes.
+recipeList:
+  # Remove vertx-sql-common dependency (merged into vertx-jdbc-client in 4.x+)
+  - org.openrewrite.maven.RemoveDependency:
+      groupId: io.vertx
+      artifactId: vertx-sql-common
+  # Update vertx-jdbc-client to 5.0.5
+  - org.openrewrite.maven.UpgradeDependencyVersion:
+      groupId: io.vertx
+      artifactId: vertx-jdbc-client
+      newVersion: 5.0.5
+  # Apply code transformations for Vert.x JDBC migration
+  - com.rewrite.VertxJdbcClientToPoolRecipe
+  - com.rewrite.VertxJdbcImportMigration
+---
+type: specs.openrewrite.org/v1beta/recipe
+name: com.rewrite.VertxJdbcImportMigration
+displayName: Migrate Vert.x JDBC imports
+description: Updates import statements for Vert.x JDBC client migration from 3.x to 5.x.
+recipeList:
+  # Change JDBCClient to JDBCPool
+  - org.openrewrite.java.ChangeType:
+      oldFullyQualifiedTypeName: io.vertx.ext.jdbc.JDBCClient
+      newFullyQualifiedTypeName: io.vertx.jdbcclient.JDBCPool
+  # Change SQLClient to JDBCPool (as it's merged into JDBC client in 4.x+)
+  - org.openrewrite.java.ChangeType:
+      oldFullyQualifiedTypeName: io.vertx.ext.sql.SQLClient
+      newFullyQualifiedTypeName: io.vertx.jdbcclient.JDBCPool
+  # Update SQLConnection to SqlConnection (new package)
+  - org.openrewrite.java.ChangeType:
+      oldFullyQualifiedTypeName: io.vertx.ext.sql.SQLConnection
+      newFullyQualifiedTypeName: io.vertx.sqlclient.SqlConnection
