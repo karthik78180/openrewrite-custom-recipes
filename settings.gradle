@@ -1,2 +1,8 @@
 rootProject.name = 'openrewrite-custom-recipes'
 
+dependencyResolutionManagement {
+	versionCatalogs {
+		libs {}
+	}
+}
+

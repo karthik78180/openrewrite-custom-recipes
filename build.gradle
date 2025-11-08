@@ -10,18 +10,25 @@ repositories {
     mavenCentral()
 }
 
-sourceCompatibility = JavaVersion.VERSION_21
+// Java toolchain for Gradle 9+
+java {
+    sourceCompatibility = JavaVersion.VERSION_21
+    toolchain {
+        languageVersion = JavaLanguageVersion.of(21)
+    }
+}
 
 dependencies {
-    implementation platform("org.openrewrite:rewrite-bom:8.52.1")
-    implementation "org.openrewrite:rewrite-java"
-    implementation "org.openrewrite:rewrite-gradle"
+    implementation platform(libs.openrewrite.bom)
+    implementation libs.openrewrite.java
+    implementation libs.openrewrite.gradle
 
-    testImplementation "org.openrewrite:rewrite-test"
-    testImplementation "org.junit.jupiter:junit-jupiter-api:5.9.2"
-    testRuntimeOnly "org.junit.jupiter:junit-jupiter-engine:5.9.2"
-    testImplementation("org.openrewrite:rewrite-java-21")
-    testImplementation 'org.assertj:assertj-core:3.24.2'
+    testImplementation libs.openrewrite.test
+    testImplementation libs.junit.jupiter.api
+    testRuntimeOnly libs.junit.jupiter.engine
+    testRuntimeOnly libs.junit.platform.launcher
+    testImplementation libs.openrewrite.java21
+    testImplementation libs.assertj.core
 }
 
 // Publish to local Maven repository (~/.m2)
