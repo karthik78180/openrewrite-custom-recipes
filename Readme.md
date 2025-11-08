@@ -10,7 +10,8 @@ The custom recipes in this repository are designed to:
 
 1. **Replace Base Classes**: Update classes extending `Vehicle` to extend `Car` instead.
 2. **Update Constant References**: Replace references to constants from `MicroConstant` to `ServerConstant` and update their imports.
-3. **Composite Recipe**: Combine multiple recipes into a single migration process.
+3. **Gradle Upgrades**: Automate Gradle version upgrades from 7.5+ to 8.14, including wrapper updates and deprecated API replacements.
+4. **Composite Recipes**: Combine multiple recipes into a single migration process.
 
 These recipes can be used to automate repetitive and error-prone code changes across large Java projects.
 
@@ -48,7 +49,20 @@ This recipe generalizes constant replacement by using a mapping of old constants
 - **File**: `ChangeConstantsReference`
 - **Test**: `ChangeConstantsReferenceTest`
 
-### 4. **Java21MigrationRecipes**
+### 4. **GradleUpgradeTo8_14Recipe**
+This recipe automates the upgrade of Gradle projects from version 7.5+ to version 8.14. It updates the Gradle wrapper, replaces deprecated dependency configurations (`compile` → `implementation`, `runtime` → `runtimeOnly`, etc.), and ensures plugin compatibility.
+
+- **File**: `GradleUpgradeTo8_14Recipe`
+- **Test**: `GradleUpgradeTo8_14RecipeTest`
+- **Documentation**: [`docs/GradleUpgradeTo8_14Recipe.md`](docs/GradleUpgradeTo8_14Recipe.md)
+
+**Key Features:**
+- Updates Gradle wrapper to version 8.14
+- Replaces deprecated configurations: `compile`, `testCompile`, `runtime`, `testRuntime`
+- Updates common plugins to Gradle 8.14-compatible versions
+- Handles both Groovy (`.gradle`) and Kotlin (`.gradle.kts`) build scripts
+
+### 5. **Java21MigrationRecipes**
 This is a composite recipe that combines all the above recipes into a single migration process.
 
 - **File**: `Java21MigrationRecipes`
