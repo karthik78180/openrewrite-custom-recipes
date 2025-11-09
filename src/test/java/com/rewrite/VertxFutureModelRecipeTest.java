@@ -19,6 +19,14 @@ class VertxFutureModelRecipeTest implements RewriteTest {
                 // Stub classes - no changes expected
                 java(
                         """
+                                package java.util.concurrent;
+                                public interface Callable<V> {
+                                    V call() throws Exception;
+                                }
+                                """
+                ),
+                java(
+                        """
                                 package io.vertx.core;
                                 public interface Handler<E> {
                                     void handle(E event);
@@ -82,6 +90,14 @@ class VertxFutureModelRecipeTest implements RewriteTest {
     void executeBlockingWithBlockBodyTransformed() {
         rewriteRun(
                 // Stub classes
+                java(
+                        """
+                                package java.util.concurrent;
+                                public interface Callable<V> {
+                                    V call() throws Exception;
+                                }
+                                """
+                ),
                 java(
                         """
                                 package io.vertx.core;
@@ -153,6 +169,14 @@ class VertxFutureModelRecipeTest implements RewriteTest {
     void executeBlockingWithFailTransformed() {
         rewriteRun(
                 // Stub classes
+                java(
+                        """
+                                package java.util.concurrent;
+                                public interface Callable<V> {
+                                    V call() throws Exception;
+                                }
+                                """
+                ),
                 java(
                         """
                                 package io.vertx.core;
@@ -230,29 +254,12 @@ class VertxFutureModelRecipeTest implements RewriteTest {
     @Test
     void eventuallyWithUnusedParameterTransformed() {
         rewriteRun(
-                // Stub classes
-                java(
-                        """
-                                package java.util.function;
-                                public interface Function<T, R> {
-                                    R apply(T t);
-                                }
-                                """
-                ),
-                java(
-                        """
-                                package java.util.function;
-                                public interface Supplier<T> {
-                                    T get();
-                                }
-                                """
-                ),
+                // Stub classes - only Vert.x types, not JDK types
                 java(
                         """
                                 package io.vertx.core;
                                 public interface Future<T> {
                                     Future<T> eventually(java.util.function.Function<T, Future<T>> mapper);
-                                    Future<T> eventually(java.util.function.Supplier<Future<T>> supplier);
                                 }
                                 """
                 ),
@@ -295,20 +302,12 @@ class VertxFutureModelRecipeTest implements RewriteTest {
     @Test
     void multipleTransformationsInSameFile() {
         rewriteRun(
-                // Stub classes
+                // Stub classes - minimal stubs needed for type resolution
                 java(
                         """
-                                package java.util.function;
-                                public interface Function<T, R> {
-                                    R apply(T t);
-                                }
-                                """
-                ),
-                java(
-                        """
-                                package java.util.function;
-                                public interface Supplier<T> {
-                                    T get();
+                                package java.util.concurrent;
+                                public interface Callable<V> {
+                                    V call() throws Exception;
                                 }
                                 """
                 ),
@@ -334,7 +333,6 @@ class VertxFutureModelRecipeTest implements RewriteTest {
                                 package io.vertx.core;
                                 public interface Future<T> {
                                     Future<T> eventually(java.util.function.Function<T, Future<T>> mapper);
-                                    Future<T> eventually(java.util.function.Supplier<Future<T>> supplier);
                                 }
                                 """
                 ),
@@ -425,29 +423,12 @@ class VertxFutureModelRecipeTest implements RewriteTest {
     @Test
     void eventuallyWithUsedParameterUnchanged() {
         rewriteRun(
-                // Stub classes
-                java(
-                        """
-                                package java.util.function;
-                                public interface Function<T, R> {
-                                    R apply(T t);
-                                }
-                                """
-                ),
-                java(
-                        """
-                                package java.util.function;
-                                public interface Supplier<T> {
-                                    T get();
-                                }
-                                """
-                ),
+                // Stub classes - only Vert.x types, not JDK types
                 java(
                         """
                                 package io.vertx.core;
                                 public interface Future<T> {
                                     Future<T> eventually(java.util.function.Function<T, Future<T>> mapper);
-                                    Future<T> eventually(java.util.function.Supplier<Future<T>> supplier);
                                 }
                                 """
                 ),
