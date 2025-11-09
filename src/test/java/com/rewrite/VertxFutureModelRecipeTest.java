@@ -20,7 +20,16 @@ class VertxFutureModelRecipeTest implements RewriteTest {
                 java(
                         """
                                 package io.vertx.core;
+                                public interface Handler<E> {
+                                    void handle(E event);
+                                }
+                                """
+                ),
+                java(
+                        """
+                                package io.vertx.core;
                                 public interface Vertx {
+                                    <T> Future<T> executeBlocking(Handler<Promise<T>> blockingCodeHandler);
                                     <T> Future<T> executeBlocking(java.util.concurrent.Callable<T> callable);
                                 }
                                 """
@@ -76,7 +85,16 @@ class VertxFutureModelRecipeTest implements RewriteTest {
                 java(
                         """
                                 package io.vertx.core;
+                                public interface Handler<E> {
+                                    void handle(E event);
+                                }
+                                """
+                ),
+                java(
+                        """
+                                package io.vertx.core;
                                 public interface Vertx {
+                                    <T> Future<T> executeBlocking(Handler<Promise<T>> blockingCodeHandler);
                                     <T> Future<T> executeBlocking(java.util.concurrent.Callable<T> callable);
                                 }
                                 """
@@ -138,7 +156,16 @@ class VertxFutureModelRecipeTest implements RewriteTest {
                 java(
                         """
                                 package io.vertx.core;
+                                public interface Handler<E> {
+                                    void handle(E event);
+                                }
+                                """
+                ),
+                java(
+                        """
+                                package io.vertx.core;
                                 public interface Vertx {
+                                    <T> Future<T> executeBlocking(Handler<Promise<T>> blockingCodeHandler);
                                     <T> Future<T> executeBlocking(java.util.concurrent.Callable<T> callable);
                                 }
                                 """
@@ -153,6 +180,7 @@ class VertxFutureModelRecipeTest implements RewriteTest {
                         """
                                 package io.vertx.core;
                                 public interface Promise<T> {
+                                    void complete(T result);
                                     void fail(Throwable throwable);
                                 }
                                 """
@@ -205,8 +233,25 @@ class VertxFutureModelRecipeTest implements RewriteTest {
                 // Stub classes
                 java(
                         """
+                                package java.util.function;
+                                public interface Function<T, R> {
+                                    R apply(T t);
+                                }
+                                """
+                ),
+                java(
+                        """
+                                package java.util.function;
+                                public interface Supplier<T> {
+                                    T get();
+                                }
+                                """
+                ),
+                java(
+                        """
                                 package io.vertx.core;
                                 public interface Future<T> {
+                                    Future<T> eventually(java.util.function.Function<T, Future<T>> mapper);
                                     Future<T> eventually(java.util.function.Supplier<Future<T>> supplier);
                                 }
                                 """
@@ -253,8 +298,33 @@ class VertxFutureModelRecipeTest implements RewriteTest {
                 // Stub classes
                 java(
                         """
+                                package java.util.function;
+                                public interface Function<T, R> {
+                                    R apply(T t);
+                                }
+                                """
+                ),
+                java(
+                        """
+                                package java.util.function;
+                                public interface Supplier<T> {
+                                    T get();
+                                }
+                                """
+                ),
+                java(
+                        """
+                                package io.vertx.core;
+                                public interface Handler<E> {
+                                    void handle(E event);
+                                }
+                                """
+                ),
+                java(
+                        """
                                 package io.vertx.core;
                                 public interface Vertx {
+                                    <T> Future<T> executeBlocking(Handler<Promise<T>> blockingCodeHandler);
                                     <T> Future<T> executeBlocking(java.util.concurrent.Callable<T> callable);
                                 }
                                 """
@@ -263,6 +333,7 @@ class VertxFutureModelRecipeTest implements RewriteTest {
                         """
                                 package io.vertx.core;
                                 public interface Future<T> {
+                                    Future<T> eventually(java.util.function.Function<T, Future<T>> mapper);
                                     Future<T> eventually(java.util.function.Supplier<Future<T>> supplier);
                                 }
                                 """
@@ -357,9 +428,26 @@ class VertxFutureModelRecipeTest implements RewriteTest {
                 // Stub classes
                 java(
                         """
+                                package java.util.function;
+                                public interface Function<T, R> {
+                                    R apply(T t);
+                                }
+                                """
+                ),
+                java(
+                        """
+                                package java.util.function;
+                                public interface Supplier<T> {
+                                    T get();
+                                }
+                                """
+                ),
+                java(
+                        """
                                 package io.vertx.core;
                                 public interface Future<T> {
-                                    Future<T> eventually(java.util.function.Function<T, Future<T>> function);
+                                    Future<T> eventually(java.util.function.Function<T, Future<T>> mapper);
+                                    Future<T> eventually(java.util.function.Supplier<Future<T>> supplier);
                                 }
                                 """
                 ),
