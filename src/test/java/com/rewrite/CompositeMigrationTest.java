@@ -12,7 +12,7 @@ class CompositeMigrationTest implements RewriteTest {
 
     @Override
     public void defaults(RecipeSpec spec) {
-        spec.recipeFromResource("/META-INF/rewrite/rewrite.yml", "com.example.CompositeMigration");
+        spec.recipeFromResource("/META-INF/rewrite/rewrite.yml", "com.recipies.yaml.AllMigrations");
     }
 
     @Test

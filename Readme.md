@@ -173,14 +173,96 @@ Available individual recipes:
 - `com.rewrite.VertxJdbcMigrationRecipe`
 - `com.rewrite.GradleUpgradeTo8_14Recipe`
 
-#### 4. Using YAML Configuration
+#### 4. Using YAML-Based Recipes
 
-Alternatively, reference the recipe from `rewrite.yml`:
+OpenRewrite supports declarative recipes defined in YAML format. This repository includes YAML-based recipes that can be used in addition to or instead of the Java-based recipes.
+
+**YAML Recipe Benefits:**
+- Declarative configuration (easier to read and understand)
+- Composability - combine multiple recipes without coding
+- Reusable across projects
+- No need to recompile for recipe changes
+
+**Using YAML Recipes:**
 
 ```gradle
 rewrite {
-    activeRecipe 'com.rewrite.VertxJdbcMigration'
+    activeRecipe 'com.recipies.yaml.VertxJdbcMigrations'
 }
 ```
 
-This uses the declarative recipe defined in `src/main/resources/META-INF/rewrite/rewrite.yml`.
+**Available YAML Recipes:**
+
+1. **com.recipies.yaml.VertxJdbcMigrations**
+   - Comprehensive Vert.x JDBC migration (3.9.16 to 5.0.5)
+   - Includes dependency updates and code transformations
+
+2. **com.recipies.yaml.VertxJdbcImportMigrations**
+   - Import statement migrations only
+   - Type transformations for Vert.x JDBC classes
+
+3. **com.recipies.yaml.AllMigrations**
+   - Composite recipe combining:
+     - Gradle upgrade to 8.14
+     - Base class transformations (Vehicle → Car)
+     - Constant reference updates
+     - Vert.x JDBC migration
+
+**YAML Recipe Definitions:**
+
+YAML recipes are defined in `src/main/resources/META-INF/rewrite/rewrite.yml`. Example structure:
+
+```yaml
+---
+type: specs.openrewrite.org/v1beta/recipe
+name: com.recipies.yaml.VertxJdbcMigrations
+displayName: Migrate Vert.x JDBC from 3.9.16 to 5.0.5
+description: Comprehensive migration including dependency and code changes
+recipeList:
+  - org.openrewrite.gradle.RemoveDependency:
+      groupId: io.vertx
+      artifactId: vertx-sql-common
+  - org.openrewrite.gradle.UpgradeDependencyVersion:
+      groupId: io.vertx
+      artifactId: vertx-jdbc-client
+      newVersion: 5.0.5
+  - com.rewrite.VertxJdbcClientToPoolRecipe
+  - com.recipies.yaml.VertxJdbcImportMigrations
+```
+
+**Comparing Java vs YAML Recipes:**
+
+| Aspect | Java Recipes | YAML Recipes |
+|--------|--------------|--------------|
+| **Definition** | Java classes extending `Recipe` | YAML files in `rewrite.yml` |
+| **Composition** | Implement `getRecipeList()` | List recipes in `recipeList` |
+| **Complexity** | Better for complex logic | Better for simple compositions |
+| **Performance** | Compiled, potentially faster | Interpreted at runtime |
+| **Maintenance** | Requires code changes + rebuild | Only file edits needed |
+
+**Example: Using YAML Recipes in Your Project**
+
+```gradle
+plugins {
+    id 'org.openrewrite.rewrite' version '7.16.0'
+}
+
+repositories {
+    mavenLocal()
+    mavenCentral()
+}
+
+dependencies {
+    rewrite 'com.rewrite:openrewrite-custom-recipes:1.0.0'
+}
+
+rewrite {
+    // Use YAML-based composite recipe for all migrations
+    activeRecipe 'com.recipies.yaml.AllMigrations'
+}
+```
+
+Then run:
+```bash
+./gradlew rewriteRun
+```

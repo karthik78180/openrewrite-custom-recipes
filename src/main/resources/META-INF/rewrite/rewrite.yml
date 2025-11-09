@@ -1,8 +1,8 @@
 ---
 type: specs.openrewrite.org/v1beta/recipe
-name: com.example.CompositeMigration
+name: com.recipies.yaml.AllMigrations
 displayName: Upgrade Gradle to 8.14 and Apply Custom Recipes
-description: Upgrades Gradle to version 8.14 and applies custom recipes for code modernization.
+description: Comprehensive migration combining Gradle upgrade (8.14), base class transformations, constant updates, and Vert.x JDBC migration (3.9.16 to 5.0.5).
 recipeList:
   - org.openrewrite.gradle.UpdateGradleWrapper:
       version: "8.13"
@@ -10,30 +10,33 @@ recipeList:
       distributionSha256Sum: "20f1b1176237254a6fc204d8434196fa11a4cfb387567519c61556e8710aed78"
       distributionType: "bin"
       archivePathPattern: "wrapper/dists"
-  - com.rewrite.VehicleToCarRecipe
   - com.rewrite.Java21MigrationRecipes
-  - com.rewrite.ChangeConstantsReference
+  - com.recipies.yaml.VertxJdbcMigrations
 ---
 type: specs.openrewrite.org/v1beta/recipe
-name: com.rewrite.VertxJdbcMigration
+name: com.recipies.yaml.VertxJdbcMigrations
 displayName: Migrate Vert.x JDBC from 3.9.16 to 5.0.5
 description: Comprehensive migration of Vert.x JDBC client from version 3.9.16 to 5.0.5, including dependency updates and API changes.
 recipeList:
   # Remove vertx-sql-common dependency (merged into vertx-jdbc-client in 4.x+)
-  - org.openrewrite.maven.RemoveDependency:
+  - org.openrewrite.gradle.RemoveDependency:
       groupId: io.vertx
       artifactId: vertx-sql-common
   # Update vertx-jdbc-client to 5.0.5
-  - org.openrewrite.maven.UpgradeDependencyVersion:
+  - org.openrewrite.gradle.UpgradeDependencyVersion:
       groupId: io.vertx
       artifactId: vertx-jdbc-client
       newVersion: 5.0.5
+  - org.openrewrite.gradle.UpgradeDependencyVersion:
+      groupId: io.vertx
+      artifactId: vertx-core
+      newVersion: 5.0.5
   # Apply code transformations for Vert.x JDBC migration
   - com.rewrite.VertxJdbcClientToPoolRecipe
-  - com.rewrite.VertxJdbcImportMigration
+  - com.recipies.yaml.VertxJdbcImportMigrations
 ---
 type: specs.openrewrite.org/v1beta/recipe
-name: com.rewrite.VertxJdbcImportMigration
+name: com.recipies.yaml.VertxJdbcImportMigrations
 displayName: Migrate Vert.x JDBC imports
 description: Updates import statements for Vert.x JDBC client migration from 3.x to 5.x.
 recipeList:
