@@ -4,16 +4,13 @@ import org.openrewrite.ExecutionContext;
 import org.openrewrite.Recipe;
 import org.openrewrite.TreeVisitor;
 import org.openrewrite.java.JavaIsoVisitor;
+import org.openrewrite.java.JavaTemplate;
 import org.openrewrite.java.tree.J;
 import org.openrewrite.java.tree.Expression;
 import org.openrewrite.java.tree.Statement;
-import org.openrewrite.java.tree.Space;
-import org.openrewrite.marker.Markers;
+import org.openrewrite.Cursor;
 
-import java.util.List;
-import java.util.ArrayList;
 import java.util.Collections;
-import java.util.UUID;
 
 /**
  * Transforms Vert.x code to embrace the Future model introduced in Vert.x 5.
@@ -43,34 +40,20 @@ public class VertxFutureModelRecipe extends Recipe {
         return new JavaIsoVisitor<ExecutionContext>() {
 
             @Override
-            public J.MethodInvocation visitMethodInvocation(J.MethodInvocation method, ExecutionContext ctx) {
-                J.MethodInvocation mi = super.visitMethodInvocation(method, ctx);
+            public J.Lambda visitLambda(J.Lambda lambda, ExecutionContext ctx) {
+                J.Lambda l = super.visitLambda(lambda, ctx);
 
-                // Transform executeBlocking(promise -> promise.complete(value)) to executeBlocking(() -> value)
-                if ("executeBlocking".equals(mi.getSimpleName()) && !mi.getArguments().isEmpty()) {
-                    Expression firstArg = mi.getArguments().get(0);
-
-                    if (firstArg instanceof J.Lambda lambda) {
-                        J.MethodInvocation transformed = transformExecuteBlockingLambda(mi, lambda);
-                        if (transformed != null) {
-                            return transformed;
-                        }
+                // Check if this lambda is an argument to executeBlocking or eventually
+                Cursor parent = getCursor().getParent();
+                if (parent != null && parent.getValue() instanceof J.MethodInvocation mi) {
+                    if ("executeBlocking".equals(mi.getSimpleName())) {
+                        return transformExecuteBlockingLambda(l);
+                    } else if ("eventually".equals(mi.getSimpleName())) {
+                        return transformEventuallyLambda(l);
                     }
                 }
 
-                // Transform future.eventually(v -> someFuture()) to future.eventually(() -> someFuture())
-                if ("eventually".equals(mi.getSimpleName()) && !mi.getArguments().isEmpty()) {
-                    Expression firstArg = mi.getArguments().get(0);
-
-                    if (firstArg instanceof J.Lambda lambda) {
-                        J.MethodInvocation transformed = transformEventuallyLambda(mi, lambda);
-                        if (transformed != null) {
-                            return transformed;
-                        }
-                    }
-                }
-
-                return mi;
+                return l;
             }
 
             /**
@@ -83,42 +66,34 @@ public class VertxFutureModelRecipe extends Recipe {
              * From: promise -> { doWork(); promise.complete(result); }
              * To:   () -> { doWork(); return result; }
              */
-            private J.MethodInvocation transformExecuteBlockingLambda(J.MethodInvocation mi, J.Lambda lambda) {
+            private J.Lambda transformExecuteBlockingLambda(J.Lambda lambda) {
                 // Check if lambda has a single parameter (promise)
                 if (lambda.getParameters().getParameters().size() != 1) {
-                    return null;
+                    return lambda;
                 }
 
                 J body = lambda.getBody();
-                J.Lambda newLambda = null;
 
                 // Case 1: Expression body - promise -> promise.complete(value)
                 if (body instanceof J.MethodInvocation bodyMethod) {
-                    if ("complete".equals(bodyMethod.getSimpleName())) {
-                        if (!bodyMethod.getArguments().isEmpty()) {
-                            Expression value = bodyMethod.getArguments().get(0);
-                            // Create new lambda with empty parameters and the extracted value as body
-                            newLambda = lambda.withParameters(
-                                lambda.getParameters().withParameters(Collections.emptyList())
-                            ).withBody(value);
-                        }
+                    if ("complete".equals(bodyMethod.getSimpleName()) && !bodyMethod.getArguments().isEmpty()) {
+                        // Remove parameter and update body to just the value
+                        return lambda
+                            .withParameters(lambda.getParameters().withParameters(Collections.emptyList()))
+                            .withBody(bodyMethod.getArguments().get(0));
                     }
                 }
                 // Case 2: Block body - promise -> { statements; promise.complete(value); }
                 else if (body instanceof J.Block block) {
                     J.Block transformedBlock = transformPromiseBlockToCallable(block);
                     if (transformedBlock != null) {
-                        newLambda = lambda.withParameters(
-                            lambda.getParameters().withParameters(Collections.emptyList())
-                        ).withBody(transformedBlock);
+                        return lambda
+                            .withParameters(lambda.getParameters().withParameters(Collections.emptyList()))
+                            .withBody(transformedBlock);
                     }
                 }
 
-                if (newLambda != null) {
-                    return mi.withArguments(Collections.singletonList(newLambda));
-                }
-
-                return null;
+                return lambda;
             }
 
             /**
@@ -129,10 +104,10 @@ public class VertxFutureModelRecipe extends Recipe {
              *
              * The parameter is removed if it's not used in the body.
              */
-            private J.MethodInvocation transformEventuallyLambda(J.MethodInvocation mi, J.Lambda lambda) {
+            private J.Lambda transformEventuallyLambda(J.Lambda lambda) {
                 // Check if lambda has parameters
                 if (lambda.getParameters().getParameters().isEmpty()) {
-                    return null; // Already in correct form
+                    return lambda; // Already in correct form
                 }
 
                 // Check if the parameter is used in the body
@@ -140,7 +115,7 @@ public class VertxFutureModelRecipe extends Recipe {
                     String paramName = extractParameterName(lambda.getParameters().getParameters().get(0));
 
                     if (paramName == null) {
-                        return null; // Can't determine parameter name
+                        return lambda; // Can't determine parameter name
                     }
 
                     // Simple heuristic: if parameter is not referenced in body, we can remove it
@@ -148,15 +123,13 @@ public class VertxFutureModelRecipe extends Recipe {
 
                     if (!parameterUsed) {
                         // Remove the parameter
-                        J.Lambda newLambda = lambda.withParameters(
+                        return lambda.withParameters(
                             lambda.getParameters().withParameters(Collections.emptyList())
                         );
-
-                        return mi.withArguments(Collections.singletonList(newLambda));
                     }
                 }
 
-                return null;
+                return lambda;
             }
 
             /**
@@ -180,45 +153,46 @@ public class VertxFutureModelRecipe extends Recipe {
              * Replaces promise.fail(exception) with throw exception;
              */
             private J.Block transformPromiseBlockToCallable(J.Block block) {
-                List<Statement> statements = block.getStatements();
+                java.util.List<Statement> statements = block.getStatements();
                 if (statements.isEmpty()) {
                     return null;
                 }
 
-                List<Statement> newStatements = new ArrayList<>();
+                java.util.List<Statement> newStatements = new java.util.ArrayList<>();
                 boolean transformed = false;
 
                 for (Statement stmt : statements) {
-                    // Handle promise.complete(value) -> return value
                     if (stmt instanceof J.MethodInvocation stmtMethod) {
                         if ("complete".equals(stmtMethod.getSimpleName()) &&
                             stmtMethod.getArguments().size() == 1) {
                             Expression value = stmtMethod.getArguments().get(0);
 
-                            // Create a return statement
-                            J.Return returnStmt = new J.Return(
-                                UUID.randomUUID(),
-                                stmt.getPrefix(),
-                                Markers.EMPTY,
-                                value
-                            );
+                            // Use JavaTemplate to create a proper return statement with type info
+                            J.Return returnStmt = (J.Return) JavaTemplate
+                                .builder("return #{any()};")
+                                .build()
+                                .apply(
+                                    new Cursor(getCursor(), stmt),
+                                    stmt.getCoordinates().replace(),
+                                    value
+                                );
 
                             newStatements.add(returnStmt);
                             transformed = true;
                             continue;
-                        }
-                        // Handle promise.fail(exception) -> throw exception
-                        else if ("fail".equals(stmtMethod.getSimpleName()) &&
-                                 stmtMethod.getArguments().size() == 1) {
+                        } else if ("fail".equals(stmtMethod.getSimpleName()) &&
+                                   stmtMethod.getArguments().size() == 1) {
                             Expression exception = stmtMethod.getArguments().get(0);
 
-                            // Create a throw statement
-                            J.Throw throwStmt = new J.Throw(
-                                UUID.randomUUID(),
-                                stmt.getPrefix(),
-                                Markers.EMPTY,
-                                exception
-                            );
+                            // Use JavaTemplate to create a proper throw statement with type info
+                            J.Throw throwStmt = (J.Throw) JavaTemplate
+                                .builder("throw #{any()};")
+                                .build()
+                                .apply(
+                                    new Cursor(getCursor(), stmt),
+                                    stmt.getCoordinates().replace(),
+                                    exception
+                                );
 
                             newStatements.add(throwStmt);
                             transformed = true;
