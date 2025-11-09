@@ -8,9 +8,6 @@ import org.openrewrite.java.JavaTemplate;
 import org.openrewrite.java.tree.J;
 import org.openrewrite.java.tree.Expression;
 import org.openrewrite.java.tree.Statement;
-import org.openrewrite.Cursor;
-
-import java.util.Collections;
 
 /**
  * Transforms Vert.x code to embrace the Future model introduced in Vert.x 5.
@@ -40,194 +37,203 @@ public class VertxFutureModelRecipe extends Recipe {
         return new JavaIsoVisitor<ExecutionContext>() {
 
             @Override
-            public J.Lambda visitLambda(J.Lambda lambda, ExecutionContext ctx) {
-                J.Lambda l = super.visitLambda(lambda, ctx);
+            public J.MethodInvocation visitMethodInvocation(J.MethodInvocation method, ExecutionContext ctx) {
+                J.MethodInvocation mi = super.visitMethodInvocation(method, ctx);
 
-                // Check if this lambda is an argument to executeBlocking or eventually
-                Cursor parent = getCursor().getParent();
-                if (parent != null && parent.getValue() instanceof J.MethodInvocation mi) {
-                    if ("executeBlocking".equals(mi.getSimpleName())) {
-                        return transformExecuteBlockingLambda(l);
-                    } else if ("eventually".equals(mi.getSimpleName())) {
-                        return transformEventuallyLambda(l);
+                // Transform executeBlocking
+                if ("executeBlocking".equals(mi.getSimpleName()) && !mi.getArguments().isEmpty()) {
+                    if (mi.getArguments().get(0) instanceof J.Lambda lambda) {
+                        J.MethodInvocation transformed = transformExecuteBlocking(mi, lambda);
+                        if (transformed != null) {
+                            return transformed;
+                        }
                     }
                 }
 
-                return l;
+                // Transform eventually
+                if ("eventually".equals(mi.getSimpleName()) && !mi.getArguments().isEmpty()) {
+                    if (mi.getArguments().get(0) instanceof J.Lambda lambda) {
+                        J.MethodInvocation transformed = transformEventually(mi, lambda);
+                        if (transformed != null) {
+                            return transformed;
+                        }
+                    }
+                }
+
+                return mi;
             }
 
             /**
-             * Transforms executeBlocking lambda from promise-based to Callable-based.
-             *
-             * From: promise -> promise.complete(result)
-             * To:   () -> result
-             *
-             * Also handles block bodies:
-             * From: promise -> { doWork(); promise.complete(result); }
-             * To:   () -> { doWork(); return result; }
+             * Transform executeBlocking(promise -> promise.complete(value)) to executeBlocking(() -> value)
              */
-            private J.Lambda transformExecuteBlockingLambda(J.Lambda lambda) {
-                // Check if lambda has a single parameter (promise)
+            private J.MethodInvocation transformExecuteBlocking(J.MethodInvocation mi, J.Lambda lambda) {
+                // Only transform if lambda has exactly one parameter
                 if (lambda.getParameters().getParameters().size() != 1) {
-                    return lambda;
+                    return null;
                 }
 
                 J body = lambda.getBody();
 
                 // Case 1: Expression body - promise -> promise.complete(value)
-                if (body instanceof J.MethodInvocation bodyMethod) {
-                    if ("complete".equals(bodyMethod.getSimpleName()) && !bodyMethod.getArguments().isEmpty()) {
-                        // Remove parameter and update body to just the value
-                        return lambda
-                            .withParameters(lambda.getParameters().withParameters(Collections.emptyList()))
-                            .withBody(bodyMethod.getArguments().get(0));
+                if (body instanceof J.MethodInvocation bodyMethod && "complete".equals(bodyMethod.getSimpleName())) {
+                    if (!bodyMethod.getArguments().isEmpty()) {
+                        Expression value = bodyMethod.getArguments().get(0);
+
+                        // Build the pattern based on whether mi has a select or not
+                        if (mi.getSelect() != null) {
+                            return JavaTemplate.builder("#{any()}.executeBlocking(() -> #{any()})")
+                                .build()
+                                .apply(
+                                    getCursor(),
+                                    mi.getCoordinates().replace(),
+                                    mi.getSelect(),
+                                    value
+                                );
+                        } else {
+                            return JavaTemplate.builder("executeBlocking(() -> #{any()})")
+                                .build()
+                                .apply(
+                                    getCursor(),
+                                    mi.getCoordinates().replace(),
+                                    value
+                                );
+                        }
                     }
                 }
                 // Case 2: Block body - promise -> { statements; promise.complete(value); }
                 else if (body instanceof J.Block block) {
-                    J.Block transformedBlock = transformPromiseBlockToCallable(block);
+                    String transformedBlock = buildTransformedBlock(block);
                     if (transformedBlock != null) {
-                        return lambda
-                            .withParameters(lambda.getParameters().withParameters(Collections.emptyList()))
-                            .withBody(transformedBlock);
+                        if (mi.getSelect() != null) {
+                            return JavaTemplate.builder("#{any()}.executeBlocking(() -> " + transformedBlock + ")")
+                                .build()
+                                .apply(
+                                    getCursor(),
+                                    mi.getCoordinates().replace(),
+                                    mi.getSelect()
+                                );
+                        } else {
+                            return JavaTemplate.builder("executeBlocking(() -> " + transformedBlock + ")")
+                                .build()
+                                .apply(
+                                    getCursor(),
+                                    mi.getCoordinates().replace()
+                                );
+                        }
                     }
                 }
 
-                return lambda;
-            }
-
-            /**
-             * Transforms eventually lambda from Function to Supplier.
-             *
-             * From: v -> someFuture()
-             * To:   () -> someFuture()
-             *
-             * The parameter is removed if it's not used in the body.
-             */
-            private J.Lambda transformEventuallyLambda(J.Lambda lambda) {
-                // Check if lambda has parameters
-                if (lambda.getParameters().getParameters().isEmpty()) {
-                    return lambda; // Already in correct form
-                }
-
-                // Check if the parameter is used in the body
-                if (lambda.getParameters().getParameters().size() == 1) {
-                    String paramName = extractParameterName(lambda.getParameters().getParameters().get(0));
-
-                    if (paramName == null) {
-                        return lambda; // Can't determine parameter name
-                    }
-
-                    // Simple heuristic: if parameter is not referenced in body, we can remove it
-                    boolean parameterUsed = isParameterUsedInBody(lambda.getBody(), paramName);
-
-                    if (!parameterUsed) {
-                        // Remove the parameter
-                        return lambda.withParameters(
-                            lambda.getParameters().withParameters(Collections.emptyList())
-                        );
-                    }
-                }
-
-                return lambda;
-            }
-
-            /**
-             * Extract parameter name from lambda parameter which can be either
-             * J.VariableDeclarations or J.Identifier
-             */
-            private String extractParameterName(J param) {
-                if (param instanceof J.VariableDeclarations varDecls) {
-                    if (!varDecls.getVariables().isEmpty()) {
-                        return varDecls.getVariables().get(0).getSimpleName();
-                    }
-                } else if (param instanceof J.Identifier ident) {
-                    return ident.getSimpleName();
-                }
                 return null;
             }
 
             /**
-             * Transforms a block body from promise-based to return-based.
-             * Replaces promise.complete(value) with return value;
-             * Replaces promise.fail(exception) with throw exception;
+             * Transform eventually(v -> someFuture()) to eventually(() -> someFuture())
              */
-            private J.Block transformPromiseBlockToCallable(J.Block block) {
+            private J.MethodInvocation transformEventually(J.MethodInvocation mi, J.Lambda lambda) {
+                // Only transform if lambda has exactly one parameter
+                if (lambda.getParameters().getParameters().isEmpty()) {
+                    return null; // Already transformed
+                }
+
+                if (lambda.getParameters().getParameters().size() != 1) {
+                    return null;
+                }
+
+                // Get parameter name
+                String paramName = extractParameterName(lambda.getParameters().getParameters().get(0));
+                if (paramName == null) {
+                    return null;
+                }
+
+                // Only transform if parameter is not used
+                if (isParameterUsed(lambda.getBody(), paramName)) {
+                    return null;
+                }
+
+                // Get body string
+                String bodyStr = lambda.getBody() != null ? lambda.getBody().print(getCursor()).trim() : "";
+
+                // Build the pattern based on whether mi has a select or not
+                if (mi.getSelect() != null) {
+                    return JavaTemplate.builder("#{any()}.eventually(() -> " + bodyStr + ")")
+                        .build()
+                        .apply(
+                            getCursor(),
+                            mi.getCoordinates().replace(),
+                            mi.getSelect()
+                        );
+                } else {
+                    return JavaTemplate.builder("eventually(() -> " + bodyStr + ")")
+                        .build()
+                        .apply(
+                            getCursor(),
+                            mi.getCoordinates().replace()
+                        );
+                }
+            }
+
+            /**
+             * Build transformed block string for executeBlocking
+             */
+            private String buildTransformedBlock(J.Block block) {
                 java.util.List<Statement> statements = block.getStatements();
                 if (statements.isEmpty()) {
                     return null;
                 }
 
-                java.util.List<Statement> newStatements = new java.util.ArrayList<>();
+                StringBuilder sb = new StringBuilder("{ ");
                 boolean transformed = false;
 
                 for (Statement stmt : statements) {
-                    if (stmt instanceof J.MethodInvocation stmtMethod) {
-                        if ("complete".equals(stmtMethod.getSimpleName()) &&
-                            stmtMethod.getArguments().size() == 1) {
-                            Expression value = stmtMethod.getArguments().get(0);
-
-                            // Use JavaTemplate to create a proper return statement with type info
-                            J.Return returnStmt = (J.Return) JavaTemplate
-                                .builder("return #{any()};")
-                                .build()
-                                .apply(
-                                    new Cursor(getCursor(), stmt),
-                                    stmt.getCoordinates().replace(),
-                                    value
-                                );
-
-                            newStatements.add(returnStmt);
+                    if (stmt instanceof J.MethodInvocation mi) {
+                        if ("complete".equals(mi.getSimpleName()) && mi.getArguments().size() == 1) {
+                            sb.append("return ").append(mi.getArguments().get(0).print(getCursor())).append("; ");
                             transformed = true;
-                            continue;
-                        } else if ("fail".equals(stmtMethod.getSimpleName()) &&
-                                   stmtMethod.getArguments().size() == 1) {
-                            Expression exception = stmtMethod.getArguments().get(0);
-
-                            // Use JavaTemplate to create a proper throw statement with type info
-                            J.Throw throwStmt = (J.Throw) JavaTemplate
-                                .builder("throw #{any()};")
-                                .build()
-                                .apply(
-                                    new Cursor(getCursor(), stmt),
-                                    stmt.getCoordinates().replace(),
-                                    exception
-                                );
-
-                            newStatements.add(throwStmt);
+                        } else if ("fail".equals(mi.getSimpleName()) && mi.getArguments().size() == 1) {
+                            sb.append("throw ").append(mi.getArguments().get(0).print(getCursor())).append("; ");
                             transformed = true;
-                            continue;
+                        } else {
+                            sb.append(stmt.print(getCursor())).append(" ");
                         }
+                    } else {
+                        sb.append(stmt.print(getCursor())).append(" ");
                     }
-                    newStatements.add(stmt);
                 }
 
-                if (transformed) {
-                    return block.withStatements(newStatements);
-                }
+                sb.append("}");
+                return transformed ? sb.toString() : null;
+            }
 
+            /**
+             * Extract parameter name from lambda parameter
+             */
+            private String extractParameterName(J param) {
+                if (param instanceof J.VariableDeclarations vd) {
+                    if (!vd.getVariables().isEmpty()) {
+                        return vd.getVariables().get(0).getSimpleName();
+                    }
+                } else if (param instanceof J.Identifier id) {
+                    return id.getSimpleName();
+                }
                 return null;
             }
 
             /**
-             * Simple check if a parameter name appears in the lambda body.
-             * This is a heuristic approach - a more robust solution would use
-             * variable resolution from OpenRewrite's type attribution.
+             * Check if parameter is used in the lambda body
              */
-            private boolean isParameterUsedInBody(J body, String paramName) {
+            private boolean isParameterUsed(J body, String paramName) {
                 if (body == null) {
                     return false;
                 }
 
-                // Use a visitor to check if identifier is used
                 final boolean[] used = {false};
                 new JavaIsoVisitor<Integer>() {
                     @Override
-                    public J.Identifier visitIdentifier(J.Identifier identifier, Integer integer) {
+                    public J.Identifier visitIdentifier(J.Identifier identifier, Integer p) {
                         if (paramName.equals(identifier.getSimpleName())) {
                             used[0] = true;
                         }
-                        return super.visitIdentifier(identifier, integer);
+                        return super.visitIdentifier(identifier, p);
                     }
                 }.visit(body, 0);
 
