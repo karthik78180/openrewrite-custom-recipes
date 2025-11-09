@@ -80,3 +80,25 @@ recipeList:
       sortStaticImportsAlphabetically: true
       removeUnusedImports: true
       removeUnusedNamedImports: true
+---
+type: specs.openrewrite.org/v1beta/recipe
+name: com.recipies.yaml.VertxFutureModelMigration
+displayName: Migrate to Vert.x 5 Future Model
+description: Transforms Vert.x code to embrace the future-only model introduced in Vert.x 5. Converts executeBlocking from promise-based to Callable-based, and eventually from Function to Supplier.
+recipeList:
+  # Apply the Future Model transformation recipe
+  - com.rewrite.VertxFutureModelRecipe
+---
+type: specs.openrewrite.org/v1beta/recipe
+name: com.recipies.yaml.Vertx5CompleteMigration
+displayName: Complete Vert.x 3.9.16 to 5.0.4 Migration
+description: Comprehensive migration from Vert.x 3.9.16 to 5.0.4, including JDBC client updates, dependency changes, and future model transformation.
+recipeList:
+  # Update vertx-core dependency to 5.0.4
+  - org.openrewrite.gradle.UpgradeDependencyVersion:
+      groupId: io.vertx
+      artifactId: vertx-core
+      newVersion: 5.0.4
+  # Apply all migrations
+  - com.recipies.yaml.VertxJdbcMigrations
+  - com.recipies.yaml.VertxFutureModelMigration
