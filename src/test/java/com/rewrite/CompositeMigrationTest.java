@@ -27,6 +27,7 @@ class CompositeMigrationTest implements RewriteTest {
                             String secret = MicroConstant.CLIENT_SECRET;
                             String user = MicroConstant.USER_NAME;
                         }
+                            
                         """,
                         """
                         import org.example.updated.ServerConstant;
@@ -36,6 +37,7 @@ class CompositeMigrationTest implements RewriteTest {
                             String secret = ServerConstant.CLIENT_SECRET;
                             String user = ServerConstant.USERNAME;
                         }
+
                         """
                 )
         );
