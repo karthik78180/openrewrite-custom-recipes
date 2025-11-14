@@ -162,51 +162,7 @@ String json = JacksonCodec.encodeToString(object);
 
 ## 3. Core API Changes
 
-### 3.1 Vertx Instance Creation
-
-#### Before (3.9.16)
-```java
-// Simple creation
-Vertx vertx = Vertx.vertx();
-
-// With options
-VertxOptions options = new VertxOptions()
-    .setWorkerPoolSize(20)
-    .setEventLoopPoolSize(4);
-Vertx vertx = Vertx.vertx(options);
-
-// Clustered
-VertxOptions options = new VertxOptions()
-    .setClusterManager(new HazelcastClusterManager());
-Vertx.clusteredVertx(options, res -> {
-    if (res.succeeded()) {
-        Vertx vertx = res.result();
-    }
-});
-```
-
-#### After (5.0.4)
-```java
-// Simple creation (unchanged)
-Vertx vertx = Vertx.vertx();
-
-// With options (unchanged)
-VertxOptions options = new VertxOptions()
-    .setWorkerPoolSize(20)
-    .setEventLoopPoolSize(4);
-Vertx vertx = Vertx.vertx(options);
-
-// Clustered - NEW BUILDER PATTERN
-Future<Vertx> future = Vertx.builder()
-    .withClusterManager(new HazelcastClusterManager())
-    .buildClustered();
-
-future.onSuccess(vertx -> {
-    // Use vertx instance
-});
-```
-
-### 3.2 Future & Async Handling
+### 3.1 Future & Async Handling
 
 #### Before (3.9.16)
 ```java
@@ -248,7 +204,7 @@ Promise<String> promise = Promise.promise();
 someMethodWithCallback(promise);  // Future extends Handler<AsyncResult<T>>
 ```
 
-### 3.3 CompositeFuture
+### 3.2 CompositeFuture
 
 #### Before (3.9.16)
 ```java
@@ -277,7 +233,7 @@ Future.all(future1, future2, future3)
     });
 ```
 
-### 3.4 Execute Blocking
+### 3.3 Execute Blocking
 
 #### Before (3.9.16)
 ```java
