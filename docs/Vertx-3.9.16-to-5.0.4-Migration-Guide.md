@@ -36,173 +36,597 @@ This document provides a detailed migration guide for upgrading from **Vert.x 3.
 
 ### 1.1 Core Dependencies (Gradle)
 
+The dependency structure in Vert.x has undergone significant changes between versions 3.9.16 and 5.0.4. The most notable change is the consolidation of SQL-related dependencies and the shift of Jackson from a required to an optional dependency.
+
 #### Before (3.9.16)
 ```gradle
 dependencies {
+    // Core Vert.x runtime and event loop
     implementation 'io.vertx:vertx-core:3.9.16'
+
+    // Web framework for HTTP servers and routing
     implementation 'io.vertx:vertx-web:3.9.16'
+
+    // JDBC client for database connectivity
     implementation 'io.vertx:vertx-jdbc-client:3.9.16'
+
+    // Common SQL interfaces (REQUIRED in 3.x)
     implementation 'io.vertx:vertx-sql-common:3.9.16'
+
+    // Jackson is automatically included as a transitive dependency
+    // No need to explicitly declare it
 }
 ```
 
 #### After (5.0.4)
 ```gradle
 dependencies {
+    // Core Vert.x runtime with updated async model
     implementation 'io.vertx:vertx-core:5.0.4'
+
+    // Web framework with improved security and performance
     implementation 'io.vertx:vertx-web:5.0.4'
+
+    // JDBC client - now includes SQL common interfaces
     implementation 'io.vertx:vertx-jdbc-client:5.0.4'
+
     // vertx-sql-common REMOVED - merged into vertx-jdbc-client in 4.x
+    // All SQL common interfaces are now part of vertx-sqlclient
 
     // Jackson Databind - now OPTIONAL (required in 3.x, optional in 4.x+)
-    // Add explicitly if using JSON object mapping
+    // MUST add explicitly if using JsonObject.mapFrom() or JsonObject.mapTo()
+    // or if using JSON serialization/deserialization
     implementation 'com.fasterxml.jackson.core:jackson-databind:2.15.2'
 }
 ```
 
+**Key Changes Explained:**
+
+1. **vertx-sql-common removal**: In Vert.x 4.x, the SQL common interfaces were consolidated into the new `vertx-sqlclient` module. The old `vertx-sql-common` is no longer needed and will cause conflicts if included.
+
+2. **Jackson Databind now optional**: Vert.x 4.x+ made Jackson optional to:
+   - Reduce the core dependency footprint
+   - Allow users to choose alternative JSON libraries (Gson, Moshi, etc.)
+   - Improve startup time for applications not using JSON mapping
+   - **Important**: If you use `JsonObject.mapFrom()`, `JsonObject.mapTo()`, or any JSON serialization, you MUST explicitly add Jackson to your dependencies.
+
+3. **Version alignment**: Ensure all Vert.x modules use the same version (5.0.4) to avoid compatibility issues.
+
 ### 1.2 Removed Dependencies (Complete Removal)
 
-These dependencies have been **completely removed** and have no direct replacement:
+These dependencies have been **completely removed** from Vert.x and have no direct replacement. Understanding why they were removed helps plan your migration strategy.
 
-| Dependency | Removed In | Alternative |
-|------------|------------|-------------|
-| `io.vertx:vertx-sql-common` | **4.0** | Functionality merged into `vertx-jdbc-client` |
-| `io.vertx:vertx-sync` | **5.0** | Use Virtual Threads (Java 21+) or stay with reactive patterns |
-| `io.vertx:vertx-service-factory` | **5.0** | Use standard Verticle deployment |
-| `io.vertx:vertx-maven-service-factory` | **5.0** | Use standard Maven dependency management |
-| `io.vertx:vertx-http-service-factory` | **5.0** | Use standard HTTP-based deployment |
-| Vert.x CLI (`vertx` command-line tool) | **5.0** | Use Maven/Gradle plugins or `VertxApplication` |
+| Dependency | Removed In | Alternative | Migration Effort |
+|------------|------------|-------------|------------------|
+| `io.vertx:vertx-sql-common` | **4.0** | Functionality merged into `vertx-jdbc-client` | **LOW** - Automatic via dependency updates |
+| `io.vertx:vertx-sync` | **5.0** | Use Virtual Threads (Java 21+) or stay with reactive patterns | **HIGH** - Requires code rewrite |
+| `io.vertx:vertx-service-factory` | **5.0** | Use standard Verticle deployment | **MEDIUM** - Change deployment patterns |
+| `io.vertx:vertx-maven-service-factory` | **5.0** | Use standard Maven dependency management | **LOW** - Update build configuration |
+| `io.vertx:vertx-http-service-factory` | **5.0** | Use standard HTTP-based deployment | **MEDIUM** - Change deployment approach |
+| Vert.x CLI (`vertx` command-line tool) | **5.0** | Use Maven/Gradle plugins or `VertxApplication` | **LOW** - Update scripts |
+
+**Detailed Explanations:**
+
+1. **vertx-sql-common (Removed in 4.0)**:
+   - **Why**: SQL interfaces were split across `vertx-sql-common` (callbacks) and new `vertx-sqlclient` (futures). To reduce confusion, common interfaces were consolidated.
+   - **Impact**: If you're using `SQLClient`, `SQLConnection`, or `ResultSet`, these types have moved to new packages.
+   - **Action**: Update imports from `io.vertx.ext.sql.*` to `io.vertx.sqlclient.*`
+
+2. **vertx-sync (Removed in 5.0)**:
+   - **Why**: Vert.x Sync provided fiber-based synchronous-looking code using Quasar. With Java 21's Virtual Threads (Project Loom), fibers are obsolete.
+   - **Impact**: If you used `Sync.awaitResult()` or `Sync.awaitEvent()`, you need to rewrite using async patterns or Virtual Threads.
+   - **Action**:
+     - **Option 1** (Java 21+): Use Virtual Threads with `Future.await()` (requires Vert.x 5.x)
+     - **Option 2**: Rewrite using reactive Future composition patterns
+   - **Example Migration**:
+     ```java
+     // Before (3.x with vertx-sync)
+     String result = Sync.awaitResult(asyncOperation());
+
+     // After (5.x with Virtual Threads - Java 21+)
+     String result = asyncOperation().await();
+
+     // After (5.x with reactive patterns)
+     asyncOperation()
+         .onSuccess(result -> {
+             // Use result
+         });
+     ```
+
+3. **Service Factories (Removed in 5.0)**:
+   - **Why**: Service factories added complexity without significant benefits. Modern build tools and container orchestration (Docker, Kubernetes) provide better solutions.
+   - **Impact**: If you deployed verticles using `vertx:` prefix URIs, change to standard deployment.
+   - **Action**: Use `Vertx.deployVerticle(new MyVerticle())` or deployment descriptors.
+
+4. **Vert.x CLI (Removed in 5.0)**:
+   - **Why**: The `vertx` command-line tool was rarely used and difficult to maintain. Build plugins provide better integration.
+   - **Impact**: If you used `vertx run` command, change to Gradle/Maven plugins or programmatic deployment.
+   - **Action**: Use Gradle application plugin or Maven exec plugin.
 
 **Important:** Jackson Databind (`com.fasterxml.jackson.core:jackson-databind`) changed from:
 - **3.x**: Transitive dependency (included automatically)
 - **4.x+**: Optional dependency (must add explicitly if needed)
+- **Why**: Allows users to choose alternative JSON libraries and reduces core dependencies
+- **Impact**: If you use `JsonObject.mapFrom()` or `JsonObject.mapTo()`, you'll get `NoClassDefFoundError` without explicit Jackson dependency
+- **Action**: Add `implementation 'com.fasterxml.jackson.core:jackson-databind:2.15.2'` to your build.gradle
 
 ### 1.3 Deprecated/Sunset Components (Still Available but Discouraged)
 
-These are still supported in 5.x but **discouraged** and may be removed in 6.x:
+These components are still supported in 5.x but are **actively discouraged** and will likely be removed in Vert.x 6.x. Plan your migration now to avoid breaking changes in the future.
 
-| Component | Status | Migration Path |
-|-----------|--------|----------------|
-| gRPC Netty (`vertx-grpc`) | **Sunset** | Migrate to Vert.x gRPC client/server |
-| RxJava 2 (`vertx-rx-java2`) | **Sunset** | Migrate to Mutiny or RxJava 3 |
-| OpenTracing (`vertx-opentracing`) | **Sunset** | Migrate to OpenTelemetry |
-| Vert.x Unit (`vertx-unit`) | **Sunset** | Migrate to JUnit 5 with `vertx-junit5` |
+| Component | Status | Migration Path | Urgency | Complexity |
+|-----------|--------|----------------|---------|------------|
+| gRPC Netty (`vertx-grpc`) | **Sunset** | Migrate to Vert.x gRPC client/server | **HIGH** | **MEDIUM** |
+| RxJava 2 (`vertx-rx-java2`) | **Sunset** | Migrate to Mutiny or RxJava 3 | **MEDIUM** | **LOW** |
+| OpenTracing (`vertx-opentracing`) | **Sunset** | Migrate to OpenTelemetry | **HIGH** | **MEDIUM** |
+| Vert.x Unit (`vertx-unit`) | **Sunset** | Migrate to JUnit 5 with `vertx-junit5` | **LOW** | **LOW** |
+
+**Detailed Migration Guidance:**
+
+1. **gRPC Netty (vertx-grpc) - HIGH URGENCY**:
+   - **Why Deprecated**: The old `vertx-grpc` used a fork of gRPC compiler. Vert.x now supports official gRPC with better integration.
+   - **Timeline**: Expected removal in Vert.x 6.0 (2025-2026)
+   - **Migration Steps**:
+     1. Replace `io.vertx:vertx-grpc` with `io.vertx:vertx-grpc-client` and `io.vertx:vertx-grpc-server`
+     2. Update protobuf compiler to use official `io.grpc:protoc-gen-grpc-java` + `vertx-grpc-protoc-plugin`
+     3. Update service implementations from `Promise<T>` to `Future<T>` return types
+     4. Update generated code references (classes now have `Vertx` prefix)
+   - **Benefits**: Better performance, official gRPC compatibility, streaming support
+
+2. **RxJava 2 (vertx-rx-java2) - MEDIUM URGENCY**:
+   - **Why Deprecated**: RxJava 2 reached end-of-life. RxJava 3 is the current version, and Mutiny is the recommended reactive library for Vert.x.
+   - **Timeline**: Expected removal in Vert.x 6.0
+   - **Migration Options**:
+     - **Option A** (Recommended): Migrate to **Mutiny** (`smallrye-mutiny-vertx-bindings`)
+       - Modern reactive library designed for Vert.x
+       - Better integration with Quarkus and MicroProfile
+       - Simpler API than RxJava
+     - **Option B**: Migrate to **RxJava 3** (`vertx-rx-java3`)
+       - If you have extensive RxJava experience
+       - Similar API to RxJava 2 (easier migration)
+   - **Migration Effort**: LOW - Most operators have direct equivalents
+   - **Example**:
+     ```java
+     // Before (RxJava 2)
+     import io.vertx.reactivex.core.Vertx;
+
+     // After (RxJava 3)
+     import io.vertx.rxjava3.core.Vertx;
+
+     // After (Mutiny - recommended)
+     import io.smallrye.mutiny.vertx.core.AbstractVerticle;
+     ```
+
+3. **OpenTracing (vertx-opentracing) - HIGH URGENCY**:
+   - **Why Deprecated**: OpenTracing merged with OpenCensus to form OpenTelemetry. OpenTracing is no longer maintained.
+   - **Timeline**: OpenTracing project archived. Expected removal from Vert.x in 6.0
+   - **Migration Steps**:
+     1. Replace `io.vertx:vertx-opentracing` with `io.vertx:vertx-opentelemetry`
+     2. Update tracing configuration from OpenTracing API to OpenTelemetry SDK
+     3. Update span creation and context propagation
+     4. Update exporters (Jaeger, Zipkin now support OpenTelemetry)
+   - **Benefits**: Active development, better performance, standardized across cloud-native ecosystem
+   - **Impact**: MEDIUM - API changes require code updates but concepts are similar
+
+4. **Vert.x Unit (vertx-unit) - LOW URGENCY**:
+   - **Why Deprecated**: JUnit 5 with `vertx-junit5` provides better integration and more features
+   - **Timeline**: Still functional, no hard deadline for removal
+   - **Migration Steps**:
+     1. Replace `io.vertx:vertx-unit` with `io.vertx:vertx-junit5`
+     2. Change from `@RunWith(VertxUnitRunner.class)` to `@ExtendWith(VertxExtension.class)`
+     3. Replace `TestContext` with `VertxTestContext`
+     4. Update async test patterns to use `testContext.succeedingThenComplete()`
+   - **Benefits**: Better async test support, checkpoint system, cleaner API
+   - **Migration Effort**: LOW - Straightforward API mapping
 
 ### 1.4 Module Replacements (Different Artifact)
 
-Modules that were renamed or completely rewritten:
+These modules were renamed or completely rewritten with different Maven/Gradle coordinates. You must change your dependency declarations and update your code.
 
-| Old Module (3.x) | New Module (5.x) | Change Type |
-|------------------|------------------|-------------|
-| `vertx-web-api-contract` | `vertx-web-openapi` | Complete rewrite with new API |
-| `vertx-rx-java` (RxJava 1) | `vertx-rx-java3` | RxJava 1 & 2 removed, only RxJava 3 supported |
-| `vertx-lang-kotlin-coroutines` | Built-in Kotlin coroutines | Generated suspending extensions removed |
+| Old Module (3.x) | New Module (5.x) | Change Type | Migration Effort |
+|------------------|------------------|-------------|------------------|
+| `vertx-web-api-contract` | `vertx-web-openapi` | Complete rewrite with new API | **HIGH** |
+| `vertx-rx-java` (RxJava 1) | `vertx-rx-java3` | RxJava 1 & 2 removed, only RxJava 3 supported | **LOW** |
+| `vertx-lang-kotlin-coroutines` | Built-in Kotlin coroutines | Generated suspending extensions removed | **MEDIUM** |
+
+**Detailed Migration for Each Module:**
+
+1. **vertx-web-api-contract → vertx-web-openapi**:
+   - **What Changed**: Complete rewrite to support OpenAPI 3.x specification (3.x only supported Swagger 2.0)
+   - **Dependency Change**:
+     ```gradle
+     // Before
+     implementation 'io.vertx:vertx-web-api-contract:3.9.16'
+
+     // After
+     implementation 'io.vertx:vertx-web-openapi:5.0.4'
+     ```
+   - **API Changes**:
+     - `OpenAPI3RouterFactory` replaces `RouterFactory`
+     - New validation model
+     - Improved request/response validation
+   - **Migration Effort**: HIGH - Requires rewriting OpenAPI integration code
+
+2. **vertx-rx-java (RxJava 1) → vertx-rx-java3**:
+   - **What Changed**: RxJava 1 and 2 are no longer supported. Only RxJava 3 is available.
+   - **Dependency Change**:
+     ```gradle
+     // Before
+     implementation 'io.vertx:vertx-rx-java:3.9.16'  // RxJava 1
+
+     // After
+     implementation 'io.vertx:vertx-rx-java3:5.0.4'  // RxJava 3
+     ```
+   - **Package Changes**: `io.vertx.reactivex.*` → `io.vertx.rxjava3.*`
+   - **Migration Effort**: LOW - API is similar, mostly import changes
+
+3. **vertx-lang-kotlin-coroutines Changes**:
+   - **What Changed**: Generated suspending extension functions removed. Use Kotlin's built-in coroutine support.
+   - **Before (3.x)**:
+     ```kotlin
+     // Used generated `xxxAwait()` functions
+     val result = someAsyncOperation().await()
+     ```
+   - **After (5.x)**:
+     ```kotlin
+     // Use Future.await() directly with Kotlin coroutines
+     val result = someAsyncOperation().await()
+     ```
+   - **Migration Effort**: MEDIUM - Update all `xxxAwait()` calls to use Future.await()
 
 ### 1.5 Updated Dependencies (Version Changes with Breaking Changes)
 
-Third-party libraries that have **breaking changes** between versions:
+Third-party libraries that Vert.x depends on have been updated with **breaking changes**. Even if your code doesn't directly use these libraries, you may be affected through Vert.x's usage.
 
-| Library | 3.9.16 Version | 5.0.4 Version | Impact Level | Key Changes |
-|---------|----------------|---------------|--------------|-------------|
-| **Netty** | 4.1.x | 4.1.100+ | **LOW** | Mostly internal changes |
-| **Jackson** | 2.11.x | 2.15.x | **MEDIUM** | Serialization behavior changes |
-| **Hazelcast** | 3.x/4.x | 5.3.2+ | **HIGH** | **Requires Java 11+**, API changes |
-| **MongoDB Driver** | 3.x/4.x | 5.x | **HIGH** | Complete API overhaul |
-| **GraphQL-Java** | 15.x | 23.x | **HIGH** | Breaking changes in v20, v22, v23 |
-| **Micrometer** | 1.x | 1.14+ | **MEDIUM** | Metric naming changes |
-| **PostgreSQL JDBC** | External | Built-in SCRAM | **LOW** | SCRAM auth now built-in, remove `com.ongres.scram:client` |
+| Library | 3.9.16 Version | 5.0.4 Version | Impact Level | Key Changes | Action Required |
+|---------|----------------|---------------|--------------|-------------|-----------------|
+| **Netty** | 4.1.x | 4.1.100+ | **LOW** | Mostly internal changes | Review if using Netty directly |
+| **Jackson** | 2.11.x | 2.15.x | **MEDIUM** | Serialization behavior changes | Test JSON serialization thoroughly |
+| **Hazelcast** | 3.x/4.x | 5.3.2+ | **HIGH** | **Requires Java 11+**, API changes | Update Hazelcast configuration |
+| **MongoDB Driver** | 3.x/4.x | 5.x | **HIGH** | Complete API overhaul | Rewrite MongoDB client code |
+| **GraphQL-Java** | 15.x | 23.x | **HIGH** | Breaking changes in v20, v22, v23 | Update GraphQL schemas and resolvers |
+| **Micrometer** | 1.x | 1.14+ | **MEDIUM** | Metric naming changes | Update metric names in dashboards |
+| **PostgreSQL JDBC** | External | Built-in SCRAM | **LOW** | SCRAM auth now built-in | Remove `com.ongres.scram:client` dependency |
+
+**Detailed Impact Analysis:**
+
+1. **Netty 4.1.100+ (LOW Impact)**:
+   - **What Changed**: Internal buffer management improvements, HTTP/2 enhancements
+   - **Impact**: Minimal unless you use Netty API directly
+   - **Action**: If you create `ByteBuf` or use Netty channels directly, test thoroughly
+
+2. **Jackson 2.15.x (MEDIUM Impact)**:
+   - **What Changed**:
+     - Stricter deserialization security
+     - Changed default behavior for polymorphic types
+     - Updated date/time handling
+   - **Impact**: JSON serialization may behave differently
+   - **Actions**:
+     - Test all `JsonObject.mapFrom()` and `JsonObject.mapTo()` calls
+     - Review custom Jackson modules and deserializers
+     - Check date/time serialization formats
+   - **Common Issues**:
+     ```java
+     // May need explicit configuration for polymorphic types
+     @JsonTypeInfo(use = JsonTypeInfo.Id.CLASS)
+     public abstract class BaseClass { }
+     ```
+
+3. **Hazelcast 5.3.2+ (HIGH Impact)**:
+   - **What Changed**: Complete API redesign, Java 11+ required
+   - **Impact**: If using `vertx-hazelcast` for clustering, significant changes required
+   - **Actions**:
+     1. Update Hazelcast configuration XML/YAML
+     2. Review cluster discovery settings
+     3. Update serialization configuration
+     4. Test cluster formation and failover
+   - **Migration Effort**: 2-4 weeks for complex deployments
+
+4. **MongoDB Driver 5.x (HIGH Impact)**:
+   - **What Changed**: Reactive Streams API, new connection string format
+   - **Impact**: All MongoDB queries need review
+   - **Actions**:
+     1. Update connection strings (mongodb:// format changes)
+     2. Review reactive operations
+     3. Update aggregation pipelines
+     4. Test transactions
+   - **Migration Effort**: 1-3 weeks depending on MongoDB usage
+
+5. **GraphQL-Java 23.x (HIGH Impact)**:
+   - **What Changed**: DataLoader improvements, schema validation changes
+   - **Impact**: GraphQL schema and resolver updates needed
+   - **Actions**:
+     1. Update schema definitions
+     2. Review data fetchers
+     3. Update DataLoader patterns
+     4. Test all GraphQL queries
+   - **Breaking Changes**: Some deprecated APIs removed
+
+6. **Micrometer 1.14+ (MEDIUM Impact)**:
+   - **What Changed**: Metric naming conventions, registry changes
+   - **Impact**: Metric names in monitoring dashboards may need updates
+   - **Actions**:
+     1. Review metric naming (may have different prefixes)
+     2. Update Grafana/Prometheus dashboards
+     3. Test metric collection
+   - **Migration Effort**: Few hours to update dashboards
+
+7. **PostgreSQL JDBC - SCRAM Auth (LOW Impact)**:
+   - **What Changed**: SCRAM-SHA-256 authentication now built-in
+   - **Impact**: Can remove external SCRAM dependency
+   - **Action**:
+     ```gradle
+     // Before - needed external dependency
+     implementation 'com.ongres.scram:client:2.1'
+
+     // After - SCRAM built-in, remove dependency
+     // (no dependency needed)
+     ```
 
 ---
 
 ## 2. Package & Import Changes
 
+Major package reorganizations occurred between Vert.x 3.x and 5.x. These changes reflect architectural improvements and consolidation of functionality.
+
 ### 2.1 JDBC & SQL Client Packages
+
+The SQL client architecture was completely redesigned in Vert.x 4.x to provide a unified reactive SQL client API. This is one of the most significant package changes you'll encounter.
 
 #### Before (3.9.16)
 ```java
+// Old callback-based JDBC client
 import io.vertx.ext.jdbc.JDBCClient;
 import io.vertx.ext.sql.SQLClient;
 import io.vertx.ext.sql.SQLConnection;
 import io.vertx.ext.sql.ResultSet;
 import io.vertx.ext.sql.UpdateResult;
+
+// Example usage
+JDBCClient client = JDBCClient.createShared(vertx, config);
+client.getConnection(ar -> {
+    if (ar.succeeded()) {
+        SQLConnection connection = ar.result();
+        connection.query("SELECT * FROM users", res -> {
+            if (res.succeeded()) {
+                ResultSet rs = res.result();
+                List<JsonObject> rows = rs.getRows();
+            }
+        });
+    }
+});
 ```
 
 #### After (5.0.4)
 ```java
+// New future-based SQL client with connection pooling
 import io.vertx.jdbcclient.JDBCPool;
+import io.vertx.jdbcclient.JDBCConnectOptions;
+import io.vertx.sqlclient.Pool;
 import io.vertx.sqlclient.SqlConnection;
 import io.vertx.sqlclient.RowSet;
 import io.vertx.sqlclient.Row;
 import io.vertx.sqlclient.RowIterator;
 // ResultSet and UpdateResult replaced by RowSet<Row>
+
+// Example usage
+JDBCPool pool = JDBCPool.pool(vertx, connectOptions, poolOptions);
+pool.query("SELECT * FROM users")
+    .execute()
+    .onSuccess(rows -> {
+        for (Row row : rows) {
+            String username = row.getString("username");
+            Integer age = row.getInteger("age");
+        }
+    });
 ```
 
+**Key Package Changes:**
+
+| Old Package (3.x) | New Package (5.x) | Reason for Change |
+|-------------------|-------------------|-------------------|
+| `io.vertx.ext.jdbc.JDBCClient` | `io.vertx.jdbcclient.JDBCPool` | Unified SQL client API with connection pooling |
+| `io.vertx.ext.sql.SQLClient` | `io.vertx.sqlclient.Pool` | Common interface for all SQL databases |
+| `io.vertx.ext.sql.SQLConnection` | `io.vertx.sqlclient.SqlConnection` | Reactive connection API |
+| `io.vertx.ext.sql.ResultSet` | `io.vertx.sqlclient.RowSet<Row>` | Type-safe row iteration |
+| `io.vertx.ext.sql.UpdateResult` | `io.vertx.sqlclient.RowSet<Row>` | Unified result type |
+
+**Migration Tips:**
+1. **ResultSet → RowSet**: The new `RowSet` is iterable and provides type-safe column access
+2. **getRows() → iterate**: Instead of `resultSet.getRows()`, iterate directly: `for (Row row : rowSet)`
+3. **Connection pooling**: `JDBCPool` manages connections automatically - no need for manual `getConnection()`
+4. **Prepared statements**: Use `pool.preparedQuery()` instead of creating prepared statements manually
+
 ### 2.2 Jackson JSON Package Changes
+
+Jackson integration was refactored in Vert.x 4.x to make it pluggable and optional.
 
 #### Before (3.9.16)
 ```java
 import io.vertx.core.json.Json;
+import com.fasterxml.jackson.databind.ObjectMapper;
 
-// Usage
+// Accessing the ObjectMapper
 ObjectMapper mapper = Json.mapper();
+ObjectMapper prettyMapper = Json.prettyMapper();
+
+// Encoding/decoding
 String json = Json.encode(object);
+MyObject obj = Json.decodeValue(json, MyObject.class);
 ```
 
 #### After (5.0.4)
 ```java
 import io.vertx.core.json.jackson.DatabindCodec;
 import io.vertx.core.json.jackson.JacksonCodec;
+import com.fasterxml.jackson.databind.ObjectMapper;
 
-// Usage
+// Accessing the ObjectMapper
 ObjectMapper mapper = DatabindCodec.mapper();
+ObjectMapper prettyMapper = DatabindCodec.prettyMapper();
+
+// Encoding/decoding - NEW API
 String json = JacksonCodec.encodeToString(object);
+MyObject obj = JacksonCodec.decodeValue(json, MyObject.class);
+
+// Or use JsonObject methods (still works)
+JsonObject jsonObj = JsonObject.mapFrom(object);  // Requires Jackson dependency
+MyObject obj = jsonObj.mapTo(MyObject.class);
 ```
+
+**Key Changes:**
+
+| Old API (3.x) | New API (5.x) | Notes |
+|---------------|---------------|-------|
+| `Json.mapper()` | `DatabindCodec.mapper()` | Access to ObjectMapper |
+| `Json.encode()` | `JacksonCodec.encodeToString()` | Explicit codec name |
+| `Json.decode()` | `JacksonCodec.decodeValue()` | Explicit codec name |
+| `JsonObject.mapFrom()` | Still works | Requires explicit Jackson dependency |
+
+**Why This Changed:**
+- **Modularity**: Jackson is now pluggable - you can replace it with other JSON libraries
+- **Clarity**: Explicit codec names make it clear which JSON library is being used
+- **Optional dependency**: Jackson is no longer a required transitive dependency
+
+**Migration Strategy:**
+1. **Option 1** (Simple): Just update imports from `Json` to `DatabindCodec`/`JacksonCodec`
+2. **Option 2** (Recommended): Use `JsonObject.mapFrom()` and `JsonObject.mapTo()` for better integration with Vert.x
+3. Ensure Jackson dependency is explicitly declared in build.gradle:
+   ```gradle
+   implementation 'com.fasterxml.jackson.core:jackson-databind:2.15.2'
+   ```
 
 ---
 
 ## 3. Core API Changes
 
+This section covers the most impactful changes in the Vert.x migration: the async programming model. Understanding these changes is critical for a successful migration.
+
 ### 3.1 Future & Async Handling
+
+The async handling API underwent major improvements in Vert.x 4.x, removing deprecated methods and introducing more ergonomic patterns.
+
+**Key Changes:**
+- `Future.setHandler()` → **REMOVED** (use `onComplete()`, `onSuccess()`, `onFailure()`)
+- `Future.completer()` → **REMOVED** (Future now implements `Handler<AsyncResult<T>>` directly)
+- New methods: `onSuccess()`, `onFailure()` for cleaner error handling
+- Better Future composition with `compose()`, `map()`, `flatMap()`
 
 #### Before (3.9.16)
 ```java
-// Using setHandler
+// Using setHandler (REMOVED in 4.x)
 Future<String> future = someAsyncOperation();
 future.setHandler(ar -> {
     if (ar.succeeded()) {
         String result = ar.result();
+        System.out.println("Got: " + result);
     } else {
         Throwable cause = ar.cause();
+        System.err.println("Failed: " + cause.getMessage());
     }
 });
 
-// Using completer
+// Using completer (REMOVED in 4.x)
 Promise<String> promise = Promise.promise();
 Handler<AsyncResult<String>> handler = promise.completer();
 someMethodWithCallback(handler);
+
+// Chaining with setHandler
+future1.setHandler(ar1 -> {
+    if (ar1.succeeded()) {
+        future2.setHandler(ar2 -> {
+            if (ar2.succeeded()) {
+                // Nested callbacks (callback hell)
+            }
+        });
+    }
+});
 ```
 
 #### After (5.0.4)
 ```java
-// setHandler REMOVED - use onComplete, onSuccess, onFailure
+// setHandler REMOVED - use onComplete for same behavior
 Future<String> future = someAsyncOperation();
 future.onComplete(ar -> {
     if (ar.succeeded()) {
         String result = ar.result();
+        System.out.println("Got: " + result);
     } else {
         Throwable cause = ar.cause();
+        System.err.println("Failed: " + cause.getMessage());
     }
 });
 
-// Separate success/failure handlers
+// BETTER: Separate success/failure handlers (recommended)
 future
-    .onSuccess(result -> System.out.println("Success: " + result))
-    .onFailure(err -> System.err.println("Failed: " + err.getMessage()));
+    .onSuccess(result -> {
+        System.out.println("Success: " + result);
+    })
+    .onFailure(err -> {
+        System.err.println("Failed: " + err.getMessage());
+    });
 
-// completer() REMOVED - Future implements Handler directly
+// completer() REMOVED - Promise implements Handler directly
 Promise<String> promise = Promise.promise();
-someMethodWithCallback(promise);  // Future extends Handler<AsyncResult<T>>
+someMethodWithCallback(promise);  // Pass promise directly!
+
+// Modern Future composition (NO callback hell)
+future1
+    .compose(result1 -> future2)
+    .compose(result2 -> future3)
+    .onSuccess(finalResult -> {
+        // Clean, linear flow
+    })
+    .onFailure(err -> {
+        // Single error handler for entire chain
+    });
 ```
+
+**Migration Strategy:**
+
+1. **Global Find/Replace** (use with caution):
+   ```
+   Find: .setHandler(
+   Replace: .onComplete(
+   ```
+
+2. **Recommended Approach** - Split into success/failure:
+   ```java
+   // Before
+   future.setHandler(ar -> {
+       if (ar.succeeded()) {
+           // success logic
+       } else {
+           // error logic
+       }
+   });
+
+   // After (cleaner)
+   future
+       .onSuccess(result -> {
+           // success logic
+       })
+       .onFailure(err -> {
+           // error logic
+       });
+   ```
+
+3. **Update completer() usage**:
+   ```java
+   // Before
+   Promise<String> promise = Promise.promise();
+   legacyMethod(promise.completer());
+
+   // After
+   Promise<String> promise = Promise.promise();
+   legacyMethod(promise);  // Promise IS a Handler now
+   ```
+
+**Why These Changes?**
+- **Clarity**: `onSuccess()` and `onFailure()` are more explicit than checking `ar.succeeded()`
+- **Composition**: Encourages functional composition over nested callbacks
+- **Simplicity**: Fewer API methods to remember
+- **Java 8+ alignment**: Matches modern Java async patterns (CompletableFuture)
 
 ### 3.2 CompositeFuture
 
@@ -235,41 +659,132 @@ Future.all(future1, future2, future3)
 
 ### 3.3 Execute Blocking
 
+The `executeBlocking()` API changed from using Promise to using Callable, making it more aligned with standard Java concurrency patterns.
+
+**Key Changes:**
+- Signature changed from `Handler<Promise<T>>` to `Callable<T>` (or `Supplier<T>`)
+- Direct return instead of `promise.complete()`
+- Explicit ordered/unordered execution control
+- Returns `Future<T>` instead of requiring a callback
+
 #### Before (3.9.16)
 ```java
+// Promise-based blocking execution
 vertx.executeBlocking(promise -> {
-    // Blocking code
-    String result = blockingOperation();
-    promise.complete(result);
+    try {
+        // Blocking operation
+        String result = performDatabaseQuery();  // Blocks thread
+        promise.complete(result);
+    } catch (Exception e) {
+        promise.fail(e);
+    }
 }, res -> {
     if (res.succeeded()) {
         String result = res.result();
+        System.out.println("Result: " + result);
+    } else {
+        System.err.println("Failed: " + res.cause());
     }
 });
 
-// Ordered execution (default in 3.x)
+// Ordered execution (executes sequentially in order submitted)
 vertx.executeBlocking(promise -> {
-    promise.complete(result);
-}, true, handler);  // ordered=true
+    promise.complete(blockingOp());
+}, true, handler);  // ordered=true (default)
+
+// Unordered execution (can run in parallel)
+vertx.executeBlocking(promise -> {
+    promise.complete(blockingOp());
+}, false, handler);  // ordered=false
 ```
 
 #### After (5.0.4)
 ```java
-// Uses Callable instead of Promise
+// Callable-based blocking execution - cleaner!
 vertx.<String>executeBlocking(() -> {
-    // Blocking code
-    return blockingOperation();  // Direct return
+    // Blocking operation
+    return performDatabaseQuery();  // Direct return!
+    // Exceptions automatically fail the Future
 }).onSuccess(result -> {
-    // Handle result
+    System.out.println("Result: " + result);
+}).onFailure(err -> {
+    System.err.println("Failed: " + err);
 });
 
-// Ordered vs unordered execution
-vertx.<String>executeBlocking(() -> blockingOperation(), true)  // ordered
-    .onSuccess(result -> {});
+// Ordered execution (default: true)
+vertx.<String>executeBlocking(() -> blockingOp(), true)
+    .onSuccess(result -> {
+        // Executes in submission order
+    });
 
-vertx.<String>executeBlocking(() -> blockingOperation(), false)  // unordered
-    .onSuccess(result -> {});
+// Unordered execution (parallel)
+vertx.<String>executeBlocking(() -> blockingOp(), false)
+    .onSuccess(result -> {
+        // Can run in parallel with other unordered tasks
+    });
+
+// Complex example: Exception handling
+vertx.<User>executeBlocking(() -> {
+    // Exceptions are automatically converted to failed Future
+    User user = database.findUserById(123);  // May throw SQLException
+    if (user == null) {
+        throw new NotFoundException("User not found");
+    }
+    return user;
+}).onSuccess(user -> {
+    logger.info("Found user: {}", user.getName());
+}).onFailure(err -> {
+    if (err instanceof NotFoundException) {
+        logger.warn("User not found");
+    } else {
+        logger.error("Database error", err);
+    }
+});
 ```
+
+**Migration Tips:**
+
+1. **Simple conversion:**
+   ```java
+   // Before
+   vertx.executeBlocking(promise -> {
+       String result = blockingOp();
+       promise.complete(result);
+   }, handler);
+
+   // After
+   vertx.<String>executeBlocking(() -> {
+       return blockingOp();
+   }).onComplete(handler);
+   ```
+
+2. **Error handling is automatic:**
+   ```java
+   // Before - manual exception handling
+   vertx.executeBlocking(promise -> {
+       try {
+           String result = riskyOperation();
+           promise.complete(result);
+       } catch (Exception e) {
+           promise.fail(e);
+       }
+   }, handler);
+
+   // After - exceptions automatically fail Future
+   vertx.<String>executeBlocking(() -> {
+       return riskyOperation();  // Exceptions handled automatically
+   }).onComplete(handler);
+   ```
+
+3. **Ordered vs Unordered:**
+   - **Ordered (true)**: Tasks execute sequentially in submission order. Use for tasks that must not overlap.
+   - **Unordered (false)**: Tasks can run in parallel. Use for independent blocking operations.
+
+**Why This Changed:**
+- **Standard Java**: `Callable<T>` is a standard Java interface, more familiar to Java developers
+- **Cleaner code**: Direct return is simpler than `promise.complete()`
+- **Better exception handling**: Exceptions automatically convert to failed Future
+- **Type safety**: Better type inference with explicit type parameter
 
 ---
 
@@ -1020,77 +1535,6 @@ Vertx rxVertx = Vertx.vertx();
 
 // Or use Mutiny (recommended)
 import io.smallrye.mutiny.vertx.core.AbstractVerticle;
-```
-
-### 7.6 gRPC
-
-#### Before (3.9.16)
-```java
-// Used Vert.x fork of gRPC compiler
-// protoc-gen-grpc-java
-
-// Generated code: GreeterGrpc
-public class MyService extends GreeterGrpc.GreeterImplBase {
-    public void sayHello(HelloRequest request, Promise<HelloReply> promise) {
-        promise.complete(HelloReply.newBuilder()
-            .setMessage("Hello " + request.getName())
-            .build());
-    }
-}
-```
-
-#### After (5.0.4)
-```java
-// Use official gRPC compiler + Vert.x plugin
-// io.grpc:protoc-gen-grpc-java + vertx-grpc-protoc-plugin
-
-// Generated code: VertxGreeterGrpc (note Vertx prefix)
-public class MyService extends VertxGreeterGrpc.GreeterImplBase {
-    public Future<HelloReply> sayHello(HelloRequest request) {
-        return Future.succeededFuture(
-            HelloReply.newBuilder()
-                .setMessage("Hello " + request.getName())
-                .build()
-        );
-    }
-}
-```
-
-### 7.7 Health Checks
-
-#### Before (3.9.16 & 4.x)
-```java
-import io.vertx.ext.healthchecks.HealthCheckHandler;
-import io.vertx.ext.healthchecks.Status;
-
-HealthCheckHandler healthCheckHandler = HealthCheckHandler.create(vertx);
-
-healthCheckHandler.register("database", promise -> {
-    // Check database
-    if (dbHealthy) {
-        promise.complete(Status.OK());
-    } else {
-        promise.complete(Status.KO());
-    }
-});
-```
-
-#### After (5.0.4)
-```java
-// Package changed!
-import io.vertx.ext.web.healthchecks.HealthCheckHandler;
-import io.vertx.ext.healthchecks.Status;
-
-HealthCheckHandler healthCheckHandler = HealthCheckHandler.create(vertx);
-
-healthCheckHandler.register("database", promise -> {
-    // Check database
-    if (dbHealthy) {
-        promise.complete(Status.OK());
-    } else {
-        promise.complete(Status.KO());
-    }
-});
 ```
 
 ---
