@@ -80,3 +80,10 @@ recipeList:
       sortStaticImportsAlphabetically: true
       removeUnusedImports: true
       removeUnusedNamedImports: true
+---
+type: specs.openrewrite.org/v1beta/recipe
+name: com.recipies.yaml.UpdateLambdaSchemaVersion
+displayName: Update Lambda Config Schema Version to 2.12.0
+description: Updates the schemaVersion field in config/*/lambda.json files to 2.12.0 if it's not already set to that value.
+recipeList:
+  - com.rewrite.UpdateLambdaSchemaVersionRecipe

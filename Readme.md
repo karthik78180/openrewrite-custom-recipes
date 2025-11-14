@@ -12,7 +12,8 @@ The custom recipes in this repository are designed to:
 2. **Update Constant References**: Replace references to constants from `MicroConstant` to `ServerConstant` and update their imports.
 3. **Gradle Upgrades**: Automate Gradle version upgrades from 7.5+ to 8.14, including wrapper updates and deprecated API replacements.
 4. **Vert.x JDBC Migration**: Migrate Vert.x JDBC client from version 3.9.16 to 5.0.5, including dependency updates and API transformations.
-5. **Composite Recipes**: Combine multiple recipes into a single migration process.
+5. **Lambda Config Schema Updates**: Update `schemaVersion` in `config/*/lambda.json` files to version 2.12.0.
+6. **Composite Recipes**: Combine multiple recipes into a single migration process.
 
 These recipes can be used to automate repetitive and error-prone code changes across large Java projects.
 
@@ -87,7 +88,43 @@ The recipe was built by analyzing the [Vert.x 4 Migration Guide](https://vertx.i
 
 The recipe automates these transformations using OpenRewrite's AST-based code transformation capabilities.
 
-### 6. **Java21MigrationRecipes**
+### 6. **UpdateLambdaSchemaVersionRecipe**
+This recipe updates the `schemaVersion` field in Lambda configuration files to `2.12.0`. It specifically targets JSON files located at `config/*/lambda.json` paths.
+
+- **File**: `UpdateLambdaSchemaVersionRecipe`
+- **Recipe Name**: `com.recipies.yaml.UpdateLambdaSchemaVersion`
+
+**Key Features:**
+- Targets only `lambda.json` files in `config/{someName}/` directory structure
+- Updates `schemaVersion` to `2.12.0` if it's not already set to that value
+- Uses OpenRewrite's JSON visitor for safe JSON transformations
+- Preserves all other JSON fields and formatting
+
+**Example Transformation:**
+```json
+// Before
+{
+  "name": "MyLambdaFunction",
+  "schemaVersion": "2.10.0",
+  "runtime": "java21"
+}
+
+// After
+{
+  "name": "MyLambdaFunction",
+  "schemaVersion": "2.12.0",
+  "runtime": "java21"
+}
+```
+
+**Usage:**
+```bash
+./gradlew rewriteRun -Drewrite.activeRecipe=com.recipies.yaml.UpdateLambdaSchemaVersion
+```
+
+This recipe is particularly useful when you have multiple Lambda configurations across different services (e.g., `config/service1/lambda.json`, `config/service2/lambda.json`, etc.) and need to standardize the schema version.
+
+### 7. **Java21MigrationRecipes**
 This is a composite recipe that combines all the above recipes into a single migration process. Use this recipe to apply all migrations at once.
 
 - **File**: `Java21MigrationRecipes`

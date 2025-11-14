@@ -1,0 +1,7 @@
+{
+  "name": "AnotherLambdaFunction",
+  "schemaVersion": "1.0.0",
+  "runtime": "java17",
+  "handler": "com.example.AnotherHandler",
+  "timeout": 600
+}
