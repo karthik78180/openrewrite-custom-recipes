@@ -1,0 +1,2152 @@
+# Vert.x 3.9.16 to 5.0.4 Comprehensive Migration Guide
+
+## Executive Summary
+
+This document provides a detailed migration guide for upgrading from **Vert.x 3.9.16 to 5.0.4**. This is a **major version migration** spanning two breaking releases (3.x → 4.x → 5.x), requiring significant code changes and architectural updates.
+
+### Migration Complexity: HIGH
+
+**Estimated Effort:**
+- Small projects (< 10k LOC): 2-4 weeks
+- Medium projects (10k-50k LOC): 1-2 months
+- Large projects (> 50k LOC): 2-4 months
+
+**Risk Level:** HIGH - Breaking changes across all core modules
+
+**Recommended Approach:** Incremental migration (3.x → 4.x → 5.x) with comprehensive testing at each stage.
+
+---
+
+## Table of Contents
+
+1. [Dependency Changes](#1-dependency-changes)
+2. [Package & Import Changes](#2-package--import-changes)
+3. [Core API Changes](#3-core-api-changes)
+4. [HTTP Client & Server Changes](#4-http-client--server-changes)
+5. [Database Client Changes](#5-database-client-changes)
+6. [Authentication & Authorization Changes](#6-authentication--authorization-changes)
+7. [Messaging & Event Bus Changes](#7-messaging--event-bus-changes)
+8. [Web Framework Changes](#8-web-framework-changes)
+9. [Async Programming Model Changes](#9-async-programming-model-changes)
+10. [Module-Specific Changes](#10-module-specific-changes)
+11. [Migration Strategy](#11-migration-strategy)
+12. [Testing & Validation](#12-testing--validation)
+13. [Breaking Changes Quick Reference](#13-breaking-changes-quick-reference)
+
+---
+
+## 1. Dependency Changes
+
+### 1.1 Core Dependencies (Maven)
+
+#### Before (3.9.16)
+```xml
+<properties>
+    <vertx.version>3.9.16</vertx.version>
+</properties>
+
+<dependencies>
+    <dependency>
+        <groupId>io.vertx</groupId>
+        <artifactId>vertx-core</artifactId>
+        <version>${vertx.version}</version>
+    </dependency>
+    <dependency>
+        <groupId>io.vertx</groupId>
+        <artifactId>vertx-web</artifactId>
+        <version>${vertx.version}</version>
+    </dependency>
+    <dependency>
+        <groupId>io.vertx</groupId>
+        <artifactId>vertx-jdbc-client</artifactId>
+        <version>${vertx.version}</version>
+    </dependency>
+    <dependency>
+        <groupId>io.vertx</groupId>
+        <artifactId>vertx-sql-common</artifactId>
+        <version>${vertx.version}</version>
+    </dependency>
+</dependencies>
+```
+
+#### After (5.0.4)
+```xml
+<properties>
+    <vertx.version>5.0.4</vertx.version>
+</properties>
+
+<dependencies>
+    <dependency>
+        <groupId>io.vertx</groupId>
+        <artifactId>vertx-core</artifactId>
+        <version>${vertx.version}</version>
+    </dependency>
+    <dependency>
+        <groupId>io.vertx</groupId>
+        <artifactId>vertx-web</artifactId>
+        <version>${vertx.version}</version>
+    </dependency>
+    <dependency>
+        <groupId>io.vertx</groupId>
+        <artifactId>vertx-jdbc-client</artifactId>
+        <version>${vertx.version}</version>
+    </dependency>
+    <!-- vertx-sql-common REMOVED - merged into vertx-jdbc-client in 4.x -->
+
+    <!-- Jackson Databind now OPTIONAL - add explicitly if using JSON mapping -->
+    <dependency>
+        <groupId>com.fasterxml.jackson.core</groupId>
+        <artifactId>jackson-databind</artifactId>
+        <version>2.15.2</version>
+    </dependency>
+</dependencies>
+```
+
+### 1.2 Core Dependencies (Gradle)
+
+#### Before (3.9.16)
+```gradle
+dependencies {
+    implementation 'io.vertx:vertx-core:3.9.16'
+    implementation 'io.vertx:vertx-web:3.9.16'
+    implementation 'io.vertx:vertx-jdbc-client:3.9.16'
+    implementation 'io.vertx:vertx-sql-common:3.9.16'
+}
+```
+
+#### After (5.0.4)
+```gradle
+dependencies {
+    implementation 'io.vertx:vertx-core:5.0.4'
+    implementation 'io.vertx:vertx-web:5.0.4'
+    implementation 'io.vertx:vertx-jdbc-client:5.0.4'
+    // vertx-sql-common REMOVED
+
+    // Jackson Databind - add if using JSON object mapping
+    implementation 'com.fasterxml.jackson.core:jackson-databind:2.15.2'
+}
+```
+
+### 1.3 Removed Dependencies
+
+| Dependency | Status | Alternative |
+|------------|--------|-------------|
+| `vertx-sql-common` | **REMOVED in 4.x** | Merged into `vertx-jdbc-client` |
+| `vertx-sync` | **REMOVED in 5.x** | Use Virtual Threads (Java 21+) or reactive patterns |
+| `vertx-service-factory` | **REMOVED in 5.x** | Use standard deployment patterns |
+| `vertx-maven-service-factory` | **REMOVED in 5.x** | Use standard dependency management |
+| `vertx-http-service-factory` | **REMOVED in 5.x** | Use standard deployment patterns |
+
+### 1.4 Module Renames & Replacements
+
+| Old Module (3.x) | New Module (5.x) | Notes |
+|------------------|------------------|-------|
+| `vertx-web-api-contract` | `vertx-web-openapi` | Complete rewrite with new API |
+| RxJava 1 support | RxJava 3 or Mutiny | RxJava 1 & 2 support removed |
+| `vertx-opentracing` | `vertx-opentelemetry` | OpenTracing deprecated |
+| gRPC Netty | Vert.x gRPC client/server | New native implementation |
+| `vertx-unit` | JUnit 5 integration | Modern testing framework |
+
+### 1.5 Third-Party Dependency Updates
+
+| Library | 3.9.16 Version | 5.0.4 Version | Impact |
+|---------|----------------|---------------|--------|
+| Netty | 4.1.x | 4.1.100+ | Minor - mostly internal |
+| Jackson | 2.11.x | 2.15.x | **Breaking changes in serialization** |
+| Hazelcast | 3.x/4.x | 5.3.2+ | **Requires Java 11+** |
+| MongoDB Driver | 3.x/4.x | 5.x | **Breaking API changes** |
+| GraphQL-Java | 15.x | 23.x | **Breaking API changes** |
+
+---
+
+## 2. Package & Import Changes
+
+### 2.1 JDBC & SQL Client Packages
+
+#### Before (3.9.16)
+```java
+import io.vertx.ext.jdbc.JDBCClient;
+import io.vertx.ext.sql.SQLClient;
+import io.vertx.ext.sql.SQLConnection;
+import io.vertx.ext.sql.ResultSet;
+import io.vertx.ext.sql.UpdateResult;
+```
+
+#### After (5.0.4)
+```java
+import io.vertx.jdbcclient.JDBCPool;
+import io.vertx.sqlclient.SqlConnection;
+import io.vertx.sqlclient.RowSet;
+import io.vertx.sqlclient.Row;
+import io.vertx.sqlclient.RowIterator;
+// ResultSet and UpdateResult replaced by RowSet<Row>
+```
+
+### 2.2 Authentication & Authorization Packages
+
+#### Before (3.9.16)
+```java
+import io.vertx.ext.auth.AuthProvider;
+import io.vertx.ext.auth.User;
+```
+
+#### After (5.0.4)
+```java
+import io.vertx.ext.auth.authentication.AuthenticationProvider;
+import io.vertx.ext.auth.authorization.AuthorizationProvider;
+import io.vertx.ext.auth.User;  // Package unchanged but interface modified
+```
+
+### 2.3 Web Package Changes
+
+#### Before (3.9.16)
+```java
+import io.vertx.ext.web.Cookie;
+import io.vertx.ext.web.Locale;
+import io.vertx.ext.web.handler.UserSessionHandler;
+```
+
+#### After (5.0.4)
+```java
+import io.vertx.core.http.Cookie;  // Moved to core
+import io.vertx.ext.web.LanguageHeader;  // Locale renamed
+// UserSessionHandler removed - functionality in SessionHandler
+```
+
+### 2.4 Health Check Package Changes
+
+#### Before (3.9.16 & 4.x)
+```java
+import io.vertx.ext.healthchecks.HealthCheckHandler;
+```
+
+#### After (5.0.4)
+```java
+import io.vertx.ext.web.healthchecks.HealthCheckHandler;  // Moved to vertx-web
+```
+
+### 2.5 JWT Package Changes
+
+#### Before (3.9.16)
+```java
+import io.vertx.ext.auth.jwt.JWTOptions;
+```
+
+#### After (5.0.4)
+```java
+import io.vertx.ext.jwt.JWTOptions;  // Moved out of auth package
+```
+
+### 2.6 Jackson JSON Package Changes
+
+#### Before (3.9.16)
+```java
+import io.vertx.core.json.Json;
+
+// Usage
+ObjectMapper mapper = Json.mapper();
+String json = Json.encode(object);
+```
+
+#### After (5.0.4)
+```java
+import io.vertx.core.json.jackson.DatabindCodec;
+import io.vertx.core.json.jackson.JacksonCodec;
+
+// Usage
+ObjectMapper mapper = DatabindCodec.mapper();
+String json = JacksonCodec.encodeToString(object);
+```
+
+---
+
+## 3. Core API Changes
+
+### 3.1 Vertx Instance Creation
+
+#### Before (3.9.16)
+```java
+// Simple creation
+Vertx vertx = Vertx.vertx();
+
+// With options
+VertxOptions options = new VertxOptions()
+    .setWorkerPoolSize(20)
+    .setEventLoopPoolSize(4);
+Vertx vertx = Vertx.vertx(options);
+
+// Clustered
+VertxOptions options = new VertxOptions()
+    .setClusterManager(new HazelcastClusterManager());
+Vertx.clusteredVertx(options, res -> {
+    if (res.succeeded()) {
+        Vertx vertx = res.result();
+    }
+});
+```
+
+#### After (5.0.4)
+```java
+// Simple creation (unchanged)
+Vertx vertx = Vertx.vertx();
+
+// With options (unchanged)
+VertxOptions options = new VertxOptions()
+    .setWorkerPoolSize(20)
+    .setEventLoopPoolSize(4);
+Vertx vertx = Vertx.vertx(options);
+
+// Clustered - NEW BUILDER PATTERN
+Future<Vertx> future = Vertx.builder()
+    .withClusterManager(new HazelcastClusterManager())
+    .buildClustered();
+
+future.onSuccess(vertx -> {
+    // Use vertx instance
+});
+```
+
+### 3.2 Future & Async Handling
+
+#### Before (3.9.16)
+```java
+// Using setHandler
+Future<String> future = someAsyncOperation();
+future.setHandler(ar -> {
+    if (ar.succeeded()) {
+        String result = ar.result();
+    } else {
+        Throwable cause = ar.cause();
+    }
+});
+
+// Using completer
+Promise<String> promise = Promise.promise();
+Handler<AsyncResult<String>> handler = promise.completer();
+someMethodWithCallback(handler);
+```
+
+#### After (5.0.4)
+```java
+// setHandler REMOVED - use onComplete, onSuccess, onFailure
+Future<String> future = someAsyncOperation();
+future.onComplete(ar -> {
+    if (ar.succeeded()) {
+        String result = ar.result();
+    } else {
+        Throwable cause = ar.cause();
+    }
+});
+
+// Separate success/failure handlers
+future
+    .onSuccess(result -> System.out.println("Success: " + result))
+    .onFailure(err -> System.err.println("Failed: " + err.getMessage()));
+
+// completer() REMOVED - Future implements Handler directly
+Promise<String> promise = Promise.promise();
+someMethodWithCallback(promise);  // Future extends Handler<AsyncResult<T>>
+```
+
+### 3.3 CompositeFuture
+
+#### Before (3.9.16)
+```java
+List<Future> futures = Arrays.asList(future1, future2, future3);
+CompositeFuture.all((List<Future>)futures).setHandler(ar -> {
+    if (ar.succeeded()) {
+        // All succeeded
+    }
+});
+```
+
+#### After (5.0.4)
+```java
+// Fully generic with wildcard types
+List<Future<?>> futures = Arrays.asList(future1, future2, future3);
+Future.all(futures).onComplete(ar -> {
+    if (ar.succeeded()) {
+        // All succeeded
+    }
+});
+
+// Or using varargs
+Future.all(future1, future2, future3)
+    .onSuccess(cf -> {
+        // All succeeded
+    });
+```
+
+### 3.4 Execute Blocking
+
+#### Before (3.9.16)
+```java
+vertx.executeBlocking(promise -> {
+    // Blocking code
+    String result = blockingOperation();
+    promise.complete(result);
+}, res -> {
+    if (res.succeeded()) {
+        String result = res.result();
+    }
+});
+
+// Ordered execution (default in 3.x)
+vertx.executeBlocking(promise -> {
+    promise.complete(result);
+}, true, handler);  // ordered=true
+```
+
+#### After (5.0.4)
+```java
+// Uses Callable instead of Promise
+vertx.<String>executeBlocking(() -> {
+    // Blocking code
+    return blockingOperation();  // Direct return
+}).onSuccess(result -> {
+    // Handle result
+});
+
+// Ordered vs unordered execution
+vertx.<String>executeBlocking(() -> blockingOperation(), true)  // ordered
+    .onSuccess(result -> {});
+
+vertx.<String>executeBlocking(() -> blockingOperation(), false)  // unordered
+    .onSuccess(result -> {});
+```
+
+### 3.5 Worker Verticles
+
+#### Before (3.9.16)
+```java
+DeploymentOptions options = new DeploymentOptions()
+    .setWorker(true)
+    .setInstances(5);
+vertx.deployVerticle("com.example.WorkerVerticle", options);
+
+// Multi-threaded worker (REMOVED in 4.x)
+DeploymentOptions mtOptions = new DeploymentOptions()
+    .setWorker(true)
+    .setMultiThreaded(true);
+```
+
+#### After (5.0.4)
+```java
+// Use ThreadingModel enum
+DeploymentOptions options = new DeploymentOptions()
+    .setThreadingModel(ThreadingModel.WORKER)
+    .setInstances(5);
+vertx.deployVerticle(new WorkerVerticle(), options);
+
+// Multi-threaded workers REMOVED
+// Alternative: Use unordered executeBlocking
+for (int i = 0; i < 5; i++) {
+    vertx.executeBlocking(() -> work(), false);  // unordered
+}
+```
+
+### 3.6 File System API
+
+#### Before (3.9.16)
+```java
+// Recursive delete with boolean flag
+vertx.fileSystem().deleteRecursive("path", true, ar -> {
+    if (ar.succeeded()) {
+        // Deleted recursively
+    }
+});
+
+// Non-recursive
+vertx.fileSystem().deleteRecursive("path", false, ar -> {
+    // Only deletes if empty
+});
+```
+
+#### After (5.0.4)
+```java
+// Separate methods - no boolean flag
+vertx.fileSystem().deleteRecursive("path")
+    .onSuccess(v -> {
+        // Deleted recursively
+    });
+
+// Non-recursive
+vertx.fileSystem().delete("path")
+    .onSuccess(v -> {
+        // Deleted (must be empty if directory)
+    });
+```
+
+### 3.7 Context & Threading
+
+#### Before (3.9.16)
+```java
+// Each call created new context for non-Vert.x threads
+for (int i = 0; i < 5; i++) {
+    vertx.getOrCreateContext();  // Creates 5 different contexts
+}
+```
+
+#### After (5.0.4)
+```java
+// Single context reused for each non-Vert.x thread
+for (int i = 0; i < 5; i++) {
+    vertx.getOrCreateContext();  // Returns SAME context
+}
+
+// For concurrent operations, use executeBlocking with ordered=false
+for (int i = 0; i < 5; i++) {
+    vertx.executeBlocking(() -> work(), false);
+}
+```
+
+---
+
+## 4. HTTP Client & Server Changes
+
+### 4.1 HTTP Client Request Pattern
+
+#### Before (3.9.16)
+```java
+HttpClient client = vertx.createHttpClient();
+
+// Simple GET request
+client.getNow(80, "example.com", "/api/data", response -> {
+    response.bodyHandler(buffer -> {
+        System.out.println("Response: " + buffer.toString());
+    });
+});
+
+// POST request with chaining
+client.post(80, "example.com", "/api/users")
+    .exceptionHandler(err -> err.printStackTrace())
+    .handler(response -> {
+        response.bodyHandler(System.out::println);
+    })
+    .end(jsonData);
+```
+
+#### After (5.0.4)
+```java
+HttpClient client = vertx.createHttpClient();
+
+// getNow REMOVED - use request().send()
+client.request(HttpMethod.GET, 80, "example.com", "/api/data")
+    .compose(HttpClientRequest::send)
+    .compose(HttpClientResponse::body)
+    .onSuccess(buffer -> {
+        System.out.println("Response: " + buffer.toString());
+    })
+    .onFailure(Throwable::printStackTrace);
+
+// POST request - separated request creation from sending
+client.request(HttpMethod.POST, 80, "example.com", "/api/users")
+    .onSuccess(request -> {
+        request.send(jsonData)
+            .compose(HttpClientResponse::body)
+            .onSuccess(System.out::println)
+            .onFailure(Throwable::printStackTrace);
+    });
+
+// Alternative: Using RequestOptions
+RequestOptions options = new RequestOptions()
+    .setHost("example.com")
+    .setPort(80)
+    .setURI("/api/data");
+
+client.request(options)
+    .compose(req -> req.send())
+    .compose(resp -> resp.body())
+    .onSuccess(buffer -> System.out.println(buffer));
+```
+
+### 4.2 WebSocket Client
+
+#### Before (3.9.16)
+```java
+HttpClient client = vertx.createHttpClient();
+
+// WebSocket connection
+client.webSocket(80, "example.com", "/socket", ws -> {
+    ws.textMessageHandler(message -> {
+        System.out.println("Received: " + message);
+    });
+    ws.writeTextMessage("Hello");
+});
+
+// Synchronous upgrade
+HttpClientRequest request = client.request(HttpMethod.GET, "/");
+WebSocket ws = request.upgrade();
+```
+
+#### After (5.0.4)
+```java
+// WebSocket methods moved to WebSocketClient interface
+WebSocketClient wsClient = vertx.createWebSocketClient();
+
+// Async WebSocket connection
+wsClient.connect(80, "example.com", "/socket")
+    .onSuccess(ws -> {
+        ws.textMessageHandler(message -> {
+            System.out.println("Received: " + message);
+        });
+        ws.writeTextMessage("Hello");
+    });
+
+// HTTP request upgrade - async
+HttpClient client = vertx.createHttpClient();
+client.request(HttpMethod.GET, 80, "example.com", "/")
+    .compose(HttpClientRequest::send)
+    .compose(response -> response.request().toWebSocket())
+    .onSuccess(ws -> {
+        // Use WebSocket
+    });
+```
+
+### 4.3 HTTP Server WebSocket
+
+#### Before (3.9.16)
+```java
+HttpServer server = vertx.createHttpServer();
+
+server.websocketHandler(ws -> {
+    System.out.println("WebSocket connected: " + ws.path());
+    ws.textMessageHandler(msg -> {
+        ws.writeTextMessage("Echo: " + msg);
+    });
+});
+
+// Synchronous upgrade in request handler
+server.requestHandler(req -> {
+    if (req.path().equals("/socket")) {
+        WebSocket ws = req.upgrade();  // Synchronous
+        ws.textMessageHandler(System.out::println);
+    }
+});
+```
+
+#### After (5.0.4)
+```java
+HttpServer server = vertx.createHttpServer();
+
+// webSocketHandler (camelCase change)
+server.webSocketHandler(ws -> {
+    System.out.println("WebSocket connected: " + ws.path());
+    ws.textMessageHandler(msg -> {
+        ws.writeTextMessage("Echo: " + msg);
+    });
+});
+
+// Async upgrade in request handler
+server.requestHandler(req -> {
+    if (req.path().equals("/socket")) {
+        req.toWebSocket()  // Returns Future<ServerWebSocket>
+            .onSuccess(ws -> {
+                ws.textMessageHandler(System.out::println);
+            })
+            .onFailure(err -> {
+                req.response().setStatusCode(400).end();
+            });
+    }
+});
+```
+
+### 4.4 HTTP Method Handling
+
+#### Before (3.9.16)
+```java
+// HttpMethod is enum
+switch (request.method()) {
+    case GET:
+        // Handle GET
+        break;
+    case POST:
+        // Handle POST
+        break;
+    case OTHER:
+        // Custom method
+        String customMethod = request.rawMethod();
+        break;
+}
+
+// Custom HTTP methods
+HttpClientRequest req = client.request(HttpMethod.OTHER, 80, "host", "/");
+req.setRawName("PROPFIND");
+```
+
+#### After (5.0.4)
+```java
+// HttpMethod is interface - switch with caution
+HttpMethod method = request.method();
+if (method == HttpMethod.GET) {
+    // Handle GET
+} else if (method == HttpMethod.POST) {
+    // Handle POST
+} else {
+    // Custom method
+    String customMethod = method.name();
+}
+
+// Custom HTTP methods - direct valueOf
+HttpClientRequest req = client.request(
+    HttpMethod.valueOf("PROPFIND"),
+    80,
+    "host",
+    "/"
+);
+```
+
+### 4.5 Response Body Handling
+
+#### Before (3.9.16)
+```java
+HttpClientResponse response = ...;
+
+// Body handler pattern
+response.bodyHandler(buffer -> {
+    System.out.println(buffer.toString());
+});
+
+// End handler
+response.endHandler(v -> {
+    System.out.println("Response complete");
+});
+```
+
+#### After (5.0.4)
+```java
+HttpClientResponse response = ...;
+
+// Use body() method returning Future
+response.body().onSuccess(buffer -> {
+    System.out.println(buffer.toString());
+});
+
+// Use end() method returning Future
+response.end().onSuccess(v -> {
+    System.out.println("Response complete");
+});
+
+// bodyHandler and endHandler still available but deprecated
+```
+
+### 4.6 HTTP Connection Pooling
+
+#### Before (3.9.16)
+```java
+HttpClientOptions options = new HttpClientOptions()
+    .setMaxPoolSize(10)
+    .setMaxWebSockets(4);  // Default 4 WebSocket connections per endpoint
+```
+
+#### After (5.0.4)
+```java
+// Pool configuration moved to PoolOptions in 5.x
+PoolOptions poolOptions = new PoolOptions()
+    .setHttp1MaxSize(10)
+    .setHttp2MaxSize(5);
+
+HttpClientOptions clientOptions = new HttpClientOptions()
+    .setPoolOptions(poolOptions)
+    .setMaxWebSockets(50);  // Default changed to 50
+```
+
+### 4.7 HTTP/2 Shutdown
+
+#### Before (4.x)
+```java
+HttpConnection connection = ...;
+connection.shutdown();  // No parameters
+```
+
+#### After (5.0.4)
+```java
+HttpConnection connection = ...;
+connection.shutdown(5, TimeUnit.SECONDS);  // Requires timeout parameter
+```
+
+---
+
+## 5. Database Client Changes
+
+### 5.1 JDBC Client - Complete Overhaul
+
+#### Before (3.9.16)
+```java
+import io.vertx.ext.jdbc.JDBCClient;
+import io.vertx.ext.sql.SQLClient;
+import io.vertx.ext.sql.SQLConnection;
+import io.vertx.ext.sql.ResultSet;
+
+// Configuration
+JsonObject config = new JsonObject()
+    .put("url", "jdbc:postgresql://localhost/mydb")
+    .put("driver_class", "org.postgresql.Driver")
+    .put("user", "dbuser")
+    .put("password", "secret");
+
+// Create client
+SQLClient client = JDBCClient.create(vertx, config);
+
+// Execute query
+client.query("SELECT * FROM users", res -> {
+    if (res.succeeded()) {
+        ResultSet resultSet = res.result();
+        List<JsonObject> rows = resultSet.getRows();
+        for (JsonObject row : rows) {
+            System.out.println(row.getString("username"));
+        }
+    }
+});
+
+// Get connection for transactions
+client.getConnection(connRes -> {
+    if (connRes.succeeded()) {
+        SQLConnection conn = connRes.result();
+
+        conn.setAutoCommit(false, autoRes -> {
+            conn.query("SELECT * FROM users", queryRes -> {
+                // Use results
+                conn.commit(commitRes -> {
+                    conn.close();
+                });
+            });
+        });
+    }
+});
+
+// Parameterized query
+JsonArray params = new JsonArray()
+    .add("john@example.com");
+client.queryWithParams(
+    "SELECT * FROM users WHERE email = ?",
+    params,
+    res -> {
+        // Handle results
+    }
+);
+```
+
+#### After (5.0.4)
+```java
+import io.vertx.jdbcclient.JDBCPool;
+import io.vertx.jdbcclient.JDBCConnectOptions;
+import io.vertx.sqlclient.SqlConnection;
+import io.vertx.sqlclient.Row;
+import io.vertx.sqlclient.RowSet;
+import io.vertx.sqlclient.Tuple;
+import io.vertx.sqlclient.Pool;
+import io.vertx.sqlclient.PoolOptions;
+
+// Configuration using JDBCConnectOptions
+JDBCConnectOptions connectOptions = new JDBCConnectOptions()
+    .setJdbcUrl("jdbc:postgresql://localhost/mydb")
+    .setUser("dbuser")
+    .setPassword("secret");
+
+PoolOptions poolOptions = new PoolOptions()
+    .setMaxSize(10);
+
+// Create pool (replaces client)
+Pool pool = JDBCPool.pool(vertx, connectOptions, poolOptions);
+
+// Execute query - NEW API
+pool.preparedQuery("SELECT * FROM users")
+    .execute()
+    .onSuccess(rows -> {
+        for (Row row : rows) {
+            System.out.println(row.getString("username"));
+        }
+    })
+    .onFailure(Throwable::printStackTrace);
+
+// Get connection for transactions
+pool.getConnection()
+    .onSuccess(conn -> {
+        conn.begin()
+            .compose(tx -> conn.query("SELECT * FROM users")
+                .execute()
+                .onSuccess(rows -> {
+                    // Use results
+                })
+                .compose(v -> tx.commit())
+            )
+            .eventually(() -> {
+                conn.close();
+                return Future.succeededFuture();
+            });
+    });
+
+// Parameterized query with Tuple
+pool.preparedQuery("SELECT * FROM users WHERE email = ?")
+    .execute(Tuple.of("john@example.com"))
+    .onSuccess(rows -> {
+        // Handle results
+    });
+```
+
+### 5.2 SQL Client - Type Changes
+
+#### Before (3.9.16)
+```java
+import io.vertx.ext.sql.ResultSet;
+import io.vertx.ext.sql.UpdateResult;
+
+// Query results
+ResultSet resultSet = ...;
+List<JsonObject> rows = resultSet.getRows();
+List<String> columnNames = resultSet.getColumnNames();
+int numRows = resultSet.getNumRows();
+
+// Update results
+UpdateResult updateResult = ...;
+int updated = updateResult.getUpdated();
+JsonArray keys = updateResult.getKeys();
+```
+
+#### After (5.0.4)
+```java
+import io.vertx.sqlclient.RowSet;
+import io.vertx.sqlclient.Row;
+import io.vertx.sqlclient.RowIterator;
+
+// Query results - Iterator pattern
+RowSet<Row> rows = ...;
+for (Row row : rows) {
+    String username = row.getString("username");
+    Integer age = row.getInteger("age");
+    // Type-safe column access
+}
+
+// Column names
+List<String> columnNames = rows.columnsNames();
+
+// Size
+int size = rows.size();
+
+// Update results - same RowSet type
+RowSet<Row> updateResult = ...;
+int rowsAffected = updateResult.rowCount();
+```
+
+### 5.3 PostgreSQL Reactive Client
+
+#### Before (3.9.16 - did not exist in this form)
+```java
+// No reactive PostgreSQL client in 3.x
+// Had to use JDBC client
+```
+
+#### After (5.0.4)
+```java
+import io.vertx.pgclient.PgBuilder;
+import io.vertx.pgclient.PgConnectOptions;
+import io.vertx.sqlclient.Pool;
+import io.vertx.sqlclient.PoolOptions;
+
+// Builder pattern for pool creation
+PgConnectOptions connectOptions = new PgConnectOptions()
+    .setHost("localhost")
+    .setPort(5432)
+    .setDatabase("mydb")
+    .setUser("dbuser")
+    .setPassword("secret");
+
+PoolOptions poolOptions = new PoolOptions()
+    .setMaxSize(10);
+
+Pool pool = PgBuilder.pool()
+    .with(poolOptions)
+    .connectingTo(connectOptions)
+    .using(vertx)
+    .build();
+
+// Use same API as JDBC pool
+pool.preparedQuery("SELECT * FROM users")
+    .execute()
+    .onSuccess(rows -> {
+        for (Row row : rows) {
+            System.out.println(row.getString("username"));
+        }
+    });
+```
+
+---
+
+## 6. Authentication & Authorization Changes
+
+### 6.1 AuthProvider Split
+
+#### Before (3.9.16)
+```java
+import io.vertx.ext.auth.AuthProvider;
+import io.vertx.ext.auth.User;
+
+// Single provider for both authentication and authorization
+AuthProvider authProvider = JDBCAuth.create(vertx, client);
+
+// Authenticate
+JsonObject credentials = new JsonObject()
+    .put("username", "john")
+    .put("password", "secret");
+
+authProvider.authenticate(credentials, res -> {
+    if (res.succeeded()) {
+        User user = res.result();
+
+        // Authorize with same provider
+        user.isAuthorized("read:users", authRes -> {
+            if (authRes.succeeded() && authRes.result()) {
+                // User is authorized
+            }
+        });
+    }
+});
+```
+
+#### After (5.0.4)
+```java
+import io.vertx.ext.auth.authentication.AuthenticationProvider;
+import io.vertx.ext.auth.authorization.AuthorizationProvider;
+import io.vertx.ext.auth.authorization.PermissionBasedAuthorization;
+import io.vertx.ext.auth.User;
+
+// Separate providers for authentication and authorization
+AuthenticationProvider authProvider = JDBCAuthentication.create(client, new JDBCAuthenticationOptions());
+AuthorizationProvider authzProvider = JDBCAuthorization.create(client, new JDBCAuthorizationOptions());
+
+// Authenticate
+JsonObject credentials = new JsonObject()
+    .put("username", "john")
+    .put("password", "secret");
+
+authProvider.authenticate(credentials)
+    .onSuccess(user -> {
+        // Get authorizations from separate provider
+        authzProvider.getAuthorizations(user)
+            .onSuccess(v -> {
+                // Check authorization
+                if (PermissionBasedAuthorization.create("read:users").match(user)) {
+                    // User is authorized
+                }
+            });
+    });
+```
+
+### 6.2 JWT Authentication
+
+#### Before (3.9.16)
+```java
+import io.vertx.ext.auth.jwt.JWTAuth;
+import io.vertx.ext.auth.jwt.JWTOptions;
+
+JWTAuthOptions config = new JWTAuthOptions()
+    .addPubSecKey(new PubSecKeyOptions()
+        .setAlgorithm("HS256")
+        .setBuffer("secret-key"));
+
+JWTAuth provider = JWTAuth.create(vertx, config);
+
+// Generate token
+String token = provider.generateToken(
+    new JsonObject().put("sub", "user123"),
+    new JWTOptions().setExpiresInSeconds(3600)
+);
+
+// Verify token
+provider.authenticate(new JsonObject().put("jwt", token), res -> {
+    if (res.succeeded()) {
+        User user = res.result();
+    }
+});
+```
+
+#### After (5.0.4)
+```java
+import io.vertx.ext.auth.jwt.JWTAuth;
+import io.vertx.ext.jwt.JWTOptions;  // Package changed!
+import io.vertx.ext.auth.PubSecKeyOptions;
+
+JWTAuthOptions config = new JWTAuthOptions()
+    .addPubSecKey(new PubSecKeyOptions()
+        .setAlgorithm("HS256")
+        .setBuffer("secret-key"));
+
+JWTAuth provider = JWTAuth.create(vertx, config);
+
+// Generate token
+String token = provider.generateToken(
+    new JsonObject().put("sub", "user123"),
+    new JWTOptions().setExpiresInSeconds(3600)  // Note: JWTOptions from different package
+);
+
+// Verify token - returns Future
+JsonObject credentials = new JsonObject().put("jwt", token);
+provider.authenticate(credentials)
+    .onSuccess(user -> {
+        // Use user
+    })
+    .onFailure(err -> {
+        // Handle auth failure
+    });
+```
+
+### 6.3 OAuth2 Authentication
+
+#### Before (3.9.16)
+```java
+import io.vertx.ext.auth.oauth2.OAuth2Auth;
+import io.vertx.ext.auth.oauth2.OAuth2FlowType;
+import io.vertx.ext.auth.oauth2.OAuth2ClientOptions;
+
+OAuth2ClientOptions clientOptions = new OAuth2ClientOptions()
+    .setClientID("client-id")
+    .setClientSecret("client-secret")
+    .setSite("https://oauth-provider.com");
+
+OAuth2Auth oauth2 = OAuth2Auth.create(vertx, OAuth2FlowType.AUTH_CODE, clientOptions);
+```
+
+#### After (5.0.4)
+```java
+import io.vertx.ext.auth.oauth2.OAuth2Auth;
+import io.vertx.ext.auth.oauth2.OAuth2Options;
+
+// New options structure
+OAuth2Options oauth2Options = new OAuth2Options()
+    .setClientId("client-id")
+    .setClientSecret("client-secret")
+    .setSite("https://oauth-provider.com")
+    .setFlow(OAuth2FlowType.AUTH_CODE);
+
+OAuth2Auth oauth2 = OAuth2Auth.create(vertx, oauth2Options);
+
+// OAuth2Auth.create() now requires Vertx instance for secure random generation
+```
+
+---
+
+## 7. Messaging & Event Bus Changes
+
+### 7.1 Event Bus Request-Response
+
+#### Before (3.9.16)
+```java
+EventBus eb = vertx.eventBus();
+
+// Request-response using send()
+eb.send("address", "message", reply -> {
+    if (reply.succeeded()) {
+        Message<String> response = reply.result();
+        System.out.println("Reply: " + response.body());
+    }
+});
+
+// Reply to reply (chained request-response)
+eb.consumer("address", message -> {
+    message.reply("response", replyToReply -> {
+        if (replyToReply.succeeded()) {
+            // Handle reply to reply
+        }
+    });
+});
+```
+
+#### After (5.0.4)
+```java
+EventBus eb = vertx.eventBus();
+
+// send() with handler REMOVED - use request()
+eb.request("address", "message")
+    .onSuccess(reply -> {
+        System.out.println("Reply: " + reply.body());
+    })
+    .onFailure(err -> {
+        System.err.println("No reply: " + err.getMessage());
+    });
+
+// Reply to reply using replyAndRequest()
+eb.consumer("address", message -> {
+    message.replyAndRequest("response")
+        .onSuccess(replyToReply -> {
+            // Handle reply to reply
+        });
+});
+```
+
+### 7.2 Message Consumer Configuration
+
+#### Before (3.9.16 & 4.x)
+```java
+MessageConsumer<String> consumer = eb.consumer("address");
+
+// Set max buffered messages after creation
+consumer.setMaxBufferedMessages(2000);
+
+consumer.handler(message -> {
+    // Handle message
+});
+```
+
+#### After (5.0.4)
+```java
+// Must configure at creation time
+MessageConsumerOptions options = new MessageConsumerOptions()
+    .setMaxBufferedMessages(2000);
+
+MessageConsumer<String> consumer = eb.consumer("address", options);
+
+consumer.handler(message -> {
+    // Handle message
+});
+
+// setMaxBufferedMessages() removed - must be set at creation
+```
+
+### 7.3 MessageProducer Changes
+
+#### Before (3.9.16)
+```java
+MessageProducer<String> producer = eb.sender("address");
+
+// MessageProducer extends WriteStream
+producer.write("message1");
+producer.write("message2");
+producer.end("final message");
+```
+
+#### After (5.0.4)
+```java
+MessageProducer<String> producer = eb.sender("address");
+
+// MessageProducer NO LONGER extends WriteStream
+// Use send() instead of write()
+producer.send("message1");
+producer.send("message2");
+producer.send("final message");
+
+// close() replaces end()
+producer.close();
+```
+
+### 7.4 WriteStream Methods Return Types
+
+#### Before (3.9.16)
+```java
+WriteStream<Buffer> stream = ...;
+
+// Fluent chaining
+stream.write(buffer1)
+    .write(buffer2)
+    .write(buffer3)
+    .end();
+```
+
+#### After (5.0.4)
+```java
+WriteStream<Buffer> stream = ...;
+
+// write() returns void or Future<Void> - NOT fluent
+stream.write(buffer1);
+stream.write(buffer2);
+stream.write(buffer3);
+stream.end();
+
+// Or using Future-based API
+stream.write(buffer1)
+    .compose(v -> stream.write(buffer2))
+    .compose(v -> stream.write(buffer3))
+    .compose(v -> stream.end())
+    .onSuccess(v -> System.out.println("Done"));
+```
+
+---
+
+## 8. Web Framework Changes
+
+### 8.1 Session Handler
+
+#### Before (3.9.16)
+```java
+import io.vertx.ext.web.handler.SessionHandler;
+import io.vertx.ext.web.handler.UserSessionHandler;
+import io.vertx.ext.web.sstore.LocalSessionStore;
+
+Router router = Router.router(vertx);
+
+// Session handler
+SessionHandler sessionHandler = SessionHandler.create(
+    LocalSessionStore.create(vertx)
+);
+router.route().handler(sessionHandler);
+
+// User session handler (separate)
+router.route().handler(UserSessionHandler.create(authProvider));
+```
+
+#### After (5.0.4)
+```java
+import io.vertx.ext.web.handler.SessionHandler;
+import io.vertx.ext.web.sstore.LocalSessionStore;
+
+Router router = Router.router(vertx);
+
+// UserSessionHandler REMOVED - functionality merged into SessionHandler
+SessionHandler sessionHandler = SessionHandler.create(
+    LocalSessionStore.create(vertx)
+);
+router.route().handler(sessionHandler);
+
+// No separate UserSessionHandler needed
+```
+
+### 8.2 Cookie Handling
+
+#### Before (3.9.16)
+```java
+import io.vertx.ext.web.Cookie;
+import io.vertx.ext.web.handler.CookieHandler;
+
+Router router = Router.router(vertx);
+
+// Cookie handler
+router.route().handler(CookieHandler.create());
+
+router.route().handler(ctx -> {
+    Cookie cookie = Cookie.cookie("name", "value");
+    ctx.addCookie(cookie);
+
+    // Get all cookies as map
+    Map<String, Cookie> cookieMap = ctx.cookieMap();
+});
+```
+
+#### After (5.0.4)
+```java
+import io.vertx.core.http.Cookie;  // Moved to core!
+// CookieHandler REMOVED
+
+Router router = Router.router(vertx);
+
+// No CookieHandler needed - cookies handled automatically
+
+router.route().handler(ctx -> {
+    Cookie cookie = Cookie.cookie("name", "value");
+    ctx.response().addCookie(cookie);
+
+    // cookieMap() REMOVED - use cookies() returning Set
+    Set<Cookie> cookies = ctx.request().cookies();
+
+    // Get specific cookie
+    Cookie sessionCookie = ctx.request().getCookie("JSESSIONID");
+});
+```
+
+### 8.3 Static Handler
+
+#### Before (3.9.16)
+```java
+import io.vertx.ext.web.handler.StaticHandler;
+
+Router router = Router.router(vertx);
+
+// Create static handler
+StaticHandler staticHandler = StaticHandler.create();
+router.route("/static/*").handler(staticHandler);
+
+// With custom classloader (OSGi support)
+StaticHandler customHandler = StaticHandler.create("webroot", classLoader);
+```
+
+#### After (5.0.4)
+```java
+import io.vertx.ext.web.handler.StaticHandler;
+
+Router router = Router.router(vertx);
+
+// Create static handler (unchanged)
+StaticHandler staticHandler = StaticHandler.create();
+router.route("/static/*").handler(staticHandler);
+
+// ClassLoader overload REMOVED - use filesystem or classpath
+StaticHandler fsHandler = StaticHandler.create("/var/www/static");
+```
+
+### 8.4 Favicon & Error Handlers
+
+#### Before (3.9.16)
+```java
+import io.vertx.ext.web.handler.FaviconHandler;
+import io.vertx.ext.web.handler.ErrorHandler;
+
+Router router = Router.router(vertx);
+
+// No Vertx instance required
+router.route().handler(FaviconHandler.create());
+router.route().failureHandler(ErrorHandler.create());
+```
+
+#### After (5.0.4)
+```java
+import io.vertx.ext.web.handler.FaviconHandler;
+import io.vertx.ext.web.handler.ErrorHandler;
+
+Router router = Router.router(vertx);
+
+// Require Vertx instance
+router.route().handler(FaviconHandler.create(vertx));
+router.route().failureHandler(ErrorHandler.create(vertx));
+```
+
+### 8.5 Template Engines
+
+#### Before (3.9.16)
+```java
+import io.vertx.ext.web.templ.HandlebarsTemplateEngine;
+
+HandlebarsTemplateEngine engine = HandlebarsTemplateEngine.create();
+
+// Direct access to underlying engine
+com.github.jknack.handlebars.Handlebars handlebars = engine.getHandlebars();
+handlebars.registerHelper("myHelper", (context, options) -> {
+    // Custom helper
+});
+```
+
+#### After (5.0.4)
+```java
+import io.vertx.ext.web.templ.handlebars.HandlebarsTemplateEngine;
+
+HandlebarsTemplateEngine engine = HandlebarsTemplateEngine.create(vertx);
+
+// Use unwrap() for all template engines
+com.github.jknack.handlebars.Handlebars handlebars = engine.unwrap();
+handlebars.registerHelper("myHelper", (context, options) -> {
+    // Custom helper
+});
+```
+
+### 8.6 SockJS Handler
+
+#### Before (3.9.16)
+```java
+import io.vertx.ext.web.handler.sockjs.SockJSHandler;
+import io.vertx.ext.web.handler.sockjs.BridgeOptions;
+
+Router router = Router.router(vertx);
+
+SockJSHandler sockJSHandler = SockJSHandler.create(vertx);
+
+// Event bus bridge
+BridgeOptions options = new BridgeOptions()
+    .addInboundPermitted(new PermittedOptions().setAddress("chat.messages"))
+    .addOutboundPermitted(new PermittedOptions().setAddress("chat.messages"));
+
+sockJSHandler.bridge(options);
+router.route("/eventbus/*").handler(sockJSHandler);
+```
+
+#### After (5.0.4)
+```java
+import io.vertx.ext.web.handler.sockjs.SockJSHandler;
+import io.vertx.ext.web.handler.sockjs.SockJSBridgeOptions;  // Renamed!
+
+Router router = Router.router(vertx);
+
+SockJSHandler sockJSHandler = SockJSHandler.create(vertx);
+
+// BridgeOptions renamed to SockJSBridgeOptions
+SockJSBridgeOptions options = new SockJSBridgeOptions()
+    .addInboundPermitted(new PermittedOptions().setAddress("chat.messages"))
+    .addOutboundPermitted(new PermittedOptions().setAddress("chat.messages"));
+
+sockJSHandler.bridge(options);
+router.route("/eventbus/*").handler(sockJSHandler);
+
+// Event bus handler registration now explicit
+SockJSHandlerOptions handlerOptions = new SockJSHandlerOptions()
+    .setRegisterWriteHandler(true);  // Enable event bus registration
+SockJSHandler customHandler = SockJSHandler.create(vertx, handlerOptions);
+```
+
+### 8.7 OpenAPI / API Contract
+
+#### Before (3.9.16)
+```java
+import io.vertx.ext.web.api.contract.openapi3.OpenAPI3RouterFactory;
+
+OpenAPI3RouterFactory.create(vertx, "api.yaml", ar -> {
+    if (ar.succeeded()) {
+        OpenAPI3RouterFactory routerFactory = ar.result();
+
+        // Add handler by operation ID
+        routerFactory.addHandlerByOperationId("getPets", ctx -> {
+            ctx.response().end(petsJson);
+        });
+
+        // Add security handler
+        routerFactory.addSecurityHandler("bearerAuth", securityHandler);
+
+        Router router = routerFactory.getRouter();
+    }
+});
+```
+
+#### After (5.0.4)
+```java
+import io.vertx.ext.web.openapi.router.RouterBuilder;
+
+// New module: vertx-web-openapi (replaces vertx-web-api-contract)
+RouterBuilder.create(vertx, "api.yaml")
+    .onSuccess(routerBuilder -> {
+        // operation() replaces addHandlerByOperationId()
+        routerBuilder.operation("getPets").handler(ctx -> {
+            ctx.response().end(petsJson);
+        });
+
+        // securityHandler() replaces addSecurityHandler()
+        routerBuilder.securityHandler("bearerAuth", securityHandler);
+
+        Router router = routerBuilder.createRouter();
+    });
+```
+
+---
+
+## 9. Async Programming Model Changes
+
+### 9.1 Future Composition
+
+#### Before (3.9.16)
+```java
+Future<String> future1 = loadUser();
+Future<List<String>> future2 = loadPermissions();
+
+// Compose futures
+future1.compose(user -> {
+    return loadUserData(user);
+}).compose(userData -> {
+    return processData(userData);
+}).setHandler(ar -> {
+    if (ar.succeeded()) {
+        // Final result
+    }
+});
+```
+
+#### After (5.0.4)
+```java
+Future<String> future1 = loadUser();
+Future<List<String>> future2 = loadPermissions();
+
+// Compose futures (similar but using onComplete/onSuccess)
+future1
+    .compose(user -> loadUserData(user))
+    .compose(userData -> processData(userData))
+    .onSuccess(result -> {
+        // Final result
+    })
+    .onFailure(err -> {
+        // Handle error
+    });
+```
+
+### 9.2 Future.eventually()
+
+#### Before (3.9.16 - not available)
+```java
+// Not available in 3.x
+```
+
+#### Introduced in 4.x, Changed in 5.x
+```java
+// 4.x - Function parameter
+future.eventually(v -> {
+    return cleanupOperation();  // Takes parameter (even if unused)
+});
+
+// 5.0.4 - Supplier parameter
+future.eventually(() -> {
+    return cleanupOperation();  // No parameter
+});
+```
+
+### 9.3 Promise Pattern
+
+#### Before (3.9.16)
+```java
+public Future<String> asyncOperation() {
+    Promise<String> promise = Promise.promise();
+
+    vertx.setTimer(1000, id -> {
+        if (success) {
+            promise.complete("result");
+        } else {
+            promise.fail("error");
+        }
+    });
+
+    return promise.future();
+}
+
+// Using completer
+public void legacyMethod(Handler<AsyncResult<String>> handler) {
+    Promise<String> promise = Promise.promise();
+    promise.future().setHandler(handler);
+
+    // Async work
+    promise.complete("result");
+}
+```
+
+#### After (5.0.4)
+```java
+public Future<String> asyncOperation() {
+    Promise<String> promise = Promise.promise();
+
+    vertx.setTimer(1000, id -> {
+        if (success) {
+            promise.complete("result");
+        } else {
+            promise.fail("error");
+        }
+    });
+
+    return promise.future();
+}
+
+// completer() REMOVED - Future implements Handler<AsyncResult<T>>
+public void modernMethod(Handler<AsyncResult<String>> handler) {
+    Promise<String> promise = Promise.promise();
+    promise.future().onComplete(handler);
+
+    // Or pass promise directly as it implements Handler
+    legacyAsyncMethod(promise);
+}
+```
+
+---
+
+## 10. Module-Specific Changes
+
+### 10.1 Circuit Breaker
+
+#### Before (3.9.16)
+```java
+import io.vertx.circuitbreaker.CircuitBreaker;
+
+CircuitBreaker breaker = CircuitBreaker.create("my-circuit", vertx);
+
+// Execute command
+breaker.executeCommand(promise -> {
+    someAsyncOperation().setHandler(promise);
+}, res -> {
+    if (res.succeeded()) {
+        // Success
+    }
+});
+
+// With fallback
+breaker.executeCommandWithFallback(
+    promise -> someAsyncOperation().setHandler(promise),
+    throwable -> "fallback value",
+    res -> {
+        // Handle result or fallback
+    }
+);
+```
+
+#### After (5.0.4)
+```java
+import io.vertx.circuitbreaker.CircuitBreaker;
+
+CircuitBreaker breaker = CircuitBreaker.create("my-circuit", vertx);
+
+// Method renamed: executeCommand → execute
+breaker.execute(promise -> {
+    someAsyncOperation().onComplete(promise);
+}).onSuccess(result -> {
+    // Success
+}).onFailure(err -> {
+    // Failure
+});
+
+// With fallback: executeCommandWithFallback → executeWithFallback
+breaker.executeWithFallback(
+    promise -> someAsyncOperation().onComplete(promise),
+    throwable -> "fallback value"
+).onSuccess(result -> {
+    // Result or fallback
+});
+```
+
+### 10.2 Service Discovery
+
+#### Before (3.9.16)
+```java
+import io.vertx.servicediscovery.ServiceDiscovery;
+
+// Create with handler
+ServiceDiscovery.create(vertx, res -> {
+    if (res.succeeded()) {
+        ServiceDiscovery discovery = res.result();
+    }
+});
+
+// Register importer with handler
+discovery.registerServiceImporter(importer, config, res -> {
+    // Registered
+});
+```
+
+#### After (5.0.4)
+```java
+import io.vertx.servicediscovery.ServiceDiscovery;
+
+// Handler-based creation REMOVED
+ServiceDiscovery discovery = ServiceDiscovery.create(vertx);
+
+// Or with options
+ServiceDiscoveryOptions options = new ServiceDiscoveryOptions();
+ServiceDiscovery discovery = ServiceDiscovery.create(vertx, options);
+
+// Register importer - returns Future
+discovery.registerServiceImporter(importer, config)
+    .onSuccess(v -> {
+        // Registered
+    });
+```
+
+### 10.3 Kafka Client
+
+#### Before (3.9.16)
+```java
+import io.vertx.kafka.admin.AdminUtils;
+import io.vertx.kafka.client.producer.KafkaProducer;
+
+// AdminUtils for topic management
+AdminUtils.createTopic(client, "topic-name", 3, 1);
+
+// Producer flush
+KafkaProducer<String, String> producer = ...;
+producer.flush();  // No handler
+```
+
+#### After (5.0.4)
+```java
+import io.vertx.kafka.admin.KafkaAdminClient;
+import io.vertx.kafka.client.producer.KafkaProducer;
+
+// AdminUtils REMOVED - use KafkaAdminClient
+KafkaAdminClient adminClient = KafkaAdminClient.create(vertx, config);
+NewTopic topic = new NewTopic("topic-name", 3, (short) 1);
+adminClient.createTopics(Arrays.asList(topic))
+    .onSuccess(v -> {
+        // Topic created
+    });
+
+// Producer flush with handler
+KafkaProducer<String, String> producer = ...;
+producer.flush(ar -> {
+    if (ar.succeeded()) {
+        // Flushed
+    }
+});
+```
+
+### 10.4 MQTT Client
+
+#### Before (3.9.16)
+```java
+import io.vertx.mqtt.MqttClient;
+
+MqttClient client = MqttClient.create(vertx);
+
+// Fluent methods
+client.connect(1883, "mqtt-broker")
+    .publish("topic", Buffer.buffer("message"), 0, false, false)
+    .disconnect();
+```
+
+#### After (5.0.4)
+```java
+import io.vertx.mqtt.MqttClient;
+
+MqttClient client = MqttClient.create(vertx);
+
+// Methods return Future - not fluent
+client.connect(1883, "mqtt-broker")
+    .compose(v -> client.publish("topic", Buffer.buffer("message"), 0, false, false))
+    .compose(v -> client.disconnect())
+    .onSuccess(v -> {
+        // All operations complete
+    });
+```
+
+### 10.5 Redis Client
+
+#### Before (3.9.16)
+```java
+import io.vertx.redis.RedisClient;
+
+RedisClient redis = RedisClient.create(vertx);
+
+redis.get("key", res -> {
+    if (res.succeeded()) {
+        String value = res.result();
+    }
+});
+```
+
+#### After (5.0.4)
+```java
+import io.vertx.redis.client.Redis;
+import io.vertx.redis.client.RedisAPI;
+
+Redis redis = Redis.createClient(vertx, "redis://localhost");
+
+RedisAPI api = RedisAPI.api(redis);
+
+api.get("key")
+    .onSuccess(response -> {
+        String value = response.toString();
+    });
+
+// close() now returns Future
+redis.close()
+    .onSuccess(v -> {
+        // Closed
+    });
+```
+
+### 10.6 RxJava Support
+
+#### Before (3.9.16)
+```java
+// RxJava 1 support
+import io.vertx.rxjava.core.Vertx;
+
+Vertx rxVertx = Vertx.vertx();
+```
+
+#### After (5.0.4)
+```java
+// RxJava 1 & 2 REMOVED - use RxJava 3 or Mutiny
+import io.vertx.rxjava3.core.Vertx;
+
+Vertx rxVertx = Vertx.vertx();
+
+// Or use Mutiny (recommended)
+import io.smallrye.mutiny.vertx.core.AbstractVerticle;
+```
+
+### 10.7 gRPC
+
+#### Before (3.9.16)
+```java
+// Used Vert.x fork of gRPC compiler
+// protoc-gen-grpc-java
+
+// Generated code: GreeterGrpc
+public class MyService extends GreeterGrpc.GreeterImplBase {
+    public void sayHello(HelloRequest request, Promise<HelloReply> promise) {
+        promise.complete(HelloReply.newBuilder()
+            .setMessage("Hello " + request.getName())
+            .build());
+    }
+}
+```
+
+#### After (5.0.4)
+```java
+// Use official gRPC compiler + Vert.x plugin
+// io.grpc:protoc-gen-grpc-java + vertx-grpc-protoc-plugin
+
+// Generated code: VertxGreeterGrpc (note Vertx prefix)
+public class MyService extends VertxGreeterGrpc.GreeterImplBase {
+    public Future<HelloReply> sayHello(HelloRequest request) {
+        return Future.succeededFuture(
+            HelloReply.newBuilder()
+                .setMessage("Hello " + request.getName())
+                .build()
+        );
+    }
+}
+```
+
+### 10.8 Health Checks
+
+#### Before (3.9.16 & 4.x)
+```java
+import io.vertx.ext.healthchecks.HealthCheckHandler;
+import io.vertx.ext.healthchecks.Status;
+
+HealthCheckHandler healthCheckHandler = HealthCheckHandler.create(vertx);
+
+healthCheckHandler.register("database", promise -> {
+    // Check database
+    if (dbHealthy) {
+        promise.complete(Status.OK());
+    } else {
+        promise.complete(Status.KO());
+    }
+});
+```
+
+#### After (5.0.4)
+```java
+// Package changed!
+import io.vertx.ext.web.healthchecks.HealthCheckHandler;
+import io.vertx.ext.healthchecks.Status;
+
+HealthCheckHandler healthCheckHandler = HealthCheckHandler.create(vertx);
+
+healthCheckHandler.register("database", promise -> {
+    // Check database
+    if (dbHealthy) {
+        promise.complete(Status.OK());
+    } else {
+        promise.complete(Status.KO());
+    }
+});
+```
+
+---
+
+## 11. Migration Strategy
+
+### 11.1 Recommended Approach
+
+**Step 1: Prepare (1-2 weeks)**
+1. Audit current Vert.x usage across codebase
+2. Review all deprecated API usage
+3. Update to latest 3.9.x version (3.9.16)
+4. Ensure comprehensive test coverage (target: >80%)
+5. Document all custom Vert.x extensions
+
+**Step 2: Migrate to 4.x (2-4 weeks)**
+1. Update dependencies to Vert.x 4.5.10 (latest 4.x)
+2. Fix compilation errors (handlers → futures)
+3. Update authentication/authorization (split providers)
+4. Migrate JDBC client to pool pattern
+5. Run full test suite
+6. Performance testing
+
+**Step 3: Stabilize on 4.x (1-2 weeks)**
+1. Fix all failing tests
+2. Performance regression testing
+3. Load testing
+4. Production canary deployment
+
+**Step 4: Migrate to 5.x (2-4 weeks)**
+1. Update dependencies to Vert.x 5.0.4
+2. Update to builder patterns
+3. Fix WebSocket client usage
+4. Update pool configurations
+5. Fix health check imports
+6. Run full test suite
+
+**Step 5: Production Rollout (2-4 weeks)**
+1. Canary deployment (5% traffic)
+2. Monitor metrics and errors
+3. Gradual rollout (20% → 50% → 100%)
+4. Full production deployment
+
+### 11.2 Direct Migration (3.9.16 → 5.0.4)
+
+**NOT RECOMMENDED** but possible for small projects:
+
+1. Create feature branch
+2. Update all dependencies to 5.0.4
+3. Fix ALL compilation errors (expect 100s-1000s)
+4. Update ALL async patterns
+5. Extensive testing required
+
+**Risk:** Very high - too many breaking changes at once
+
+### 11.3 OpenRewrite Migration Recipe
+
+Use the existing OpenRewrite recipes in this project:
+
+```yaml
+# Apply Vert.x JDBC migration
+recipeList:
+  - com.recipies.yaml.VertxJdbcMigrations
+```
+
+**What it handles:**
+- JDBC client → Pool migration
+- Import updates
+- Method call transformations
+- Dependency updates
+
+**What it doesn't handle (requires manual migration):**
+- Future/Handler API changes
+- Authentication provider split
+- HTTP client pattern changes
+- WebSocket API changes
+- Event bus changes
+
+---
+
+## 12. Testing & Validation
+
+### 12.1 Unit Testing Changes
+
+#### Before (3.9.16)
+```java
+import io.vertx.ext.unit.TestContext;
+import io.vertx.ext.unit.junit.VertxUnitRunner;
+import org.junit.runner.RunWith;
+
+@RunWith(VertxUnitRunner.class)
+public class MyTest {
+    @Test
+    public void testAsync(TestContext context) {
+        Async async = context.async();
+
+        vertx.setTimer(100, id -> {
+            context.assertTrue(true);
+            async.complete();
+        });
+    }
+}
+```
+
+#### After (5.0.4)
+```java
+import io.vertx.junit5.VertxExtension;
+import io.vertx.junit5.VertxTestContext;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+
+@ExtendWith(VertxExtension.class)
+public class MyTest {
+    @Test
+    public void testAsync(Vertx vertx, VertxTestContext testContext) {
+        vertx.setTimer(100, id -> {
+            testContext.verify(() -> {
+                // Assertions
+            });
+            testContext.completeNow();
+        });
+    }
+}
+```
+
+### 12.2 Test Success Handlers
+
+#### Before (4.x)
+```java
+someAsyncOperation()
+    .onComplete(testContext.succeeding());
+```
+
+#### After (5.0.4)
+```java
+someAsyncOperation()
+    .onComplete(testContext.succeedingThenComplete());
+```
+
+### 12.3 Recommended Test Strategy
+
+1. **Unit Tests:**
+   - Test all Vert.x API usage
+   - Mock external dependencies
+   - Focus on async behavior
+
+2. **Integration Tests:**
+   - Test HTTP endpoints
+   - Test database operations
+   - Test event bus communication
+
+3. **Performance Tests:**
+   - Baseline on 3.9.16
+   - Compare with 4.x
+   - Compare with 5.0.4
+   - Watch for regressions
+
+4. **Load Tests:**
+   - Simulate production traffic
+   - Monitor memory usage
+   - Monitor CPU usage
+   - Check for connection leaks
+
+---
+
+## 13. Breaking Changes Quick Reference
+
+### 13.1 Critical Breaking Changes
+
+| Category | Change | Impact | Effort |
+|----------|--------|--------|--------|
+| **Async Model** | `setHandler()` → `onComplete()/onSuccess()/onFailure()` | HIGH | HIGH |
+| **JDBC Client** | `JDBCClient` → `JDBCPool` | HIGH | MEDIUM |
+| **Auth** | `AuthProvider` split into Authentication/Authorization | HIGH | HIGH |
+| **HTTP Client** | Request/response pattern change | HIGH | HIGH |
+| **WebSocket** | Moved to `WebSocketClient` | MEDIUM | MEDIUM |
+| **Event Bus** | `send(handler)` → `request()` | HIGH | LOW |
+| **Worker** | `setWorker()` → `setThreadingModel()` | MEDIUM | LOW |
+| **Execute Blocking** | Promise → Callable | MEDIUM | LOW |
+
+### 13.2 Removed APIs
+
+| API | Removed In | Replacement |
+|-----|-----------|-------------|
+| `Future.setHandler()` | 4.0 | `onComplete()`, `onSuccess()`, `onFailure()` |
+| `Future.completer()` | 4.0 | Future implements Handler directly |
+| `HttpClient.getNow()` | 4.0 | `request().send()` |
+| `EventBus.send(handler)` | 4.0 | `request()` |
+| `vertx-sql-common` | 4.0 | Merged into `vertx-jdbc-client` |
+| `UserSessionHandler` | 4.0 | Merged into `SessionHandler` |
+| `vertx-sync` | 5.0 | Use Virtual Threads or reactive |
+| `HttpClient.webSocket()` | 5.0 | `WebSocketClient.connect()` |
+| `FileSystem.deleteRecursive(path, boolean)` | 5.0 | `delete()` or `deleteRecursive()` |
+| CLI framework | 5.0 | Use Picocli or similar |
+
+### 13.3 Package Moves
+
+| Old Package | New Package | Version |
+|-------------|-------------|---------|
+| `io.vertx.ext.jdbc.JDBCClient` | `io.vertx.jdbcclient.JDBCPool` | 4.0+ |
+| `io.vertx.ext.sql.*` | `io.vertx.sqlclient.*` | 4.0+ |
+| `io.vertx.ext.web.Cookie` | `io.vertx.core.http.Cookie` | 4.0+ |
+| `io.vertx.ext.web.Locale` | `io.vertx.ext.web.LanguageHeader` | 4.0+ |
+| `io.vertx.ext.auth.jwt.JWTOptions` | `io.vertx.ext.jwt.JWTOptions` | 4.0+ |
+| `io.vertx.ext.healthchecks.HealthCheckHandler` | `io.vertx.ext.web.healthchecks.HealthCheckHandler` | 5.0+ |
+
+---
+
+## Conclusion
+
+Migrating from Vert.x 3.9.16 to 5.0.4 is a **significant undertaking** that requires:
+
+1. **Thorough Planning:** Understand all breaking changes
+2. **Incremental Approach:** Migrate 3.x → 4.x → 5.x
+3. **Comprehensive Testing:** Unit, integration, performance, load
+4. **Team Training:** Educate team on new patterns
+5. **Monitoring:** Watch for regressions in production
+
+**Estimated Timeline:**
+- Small projects: 4-8 weeks
+- Medium projects: 2-4 months
+- Large projects: 4-6 months
+
+**Key Success Factors:**
+- Strong test coverage before starting
+- Incremental migration with validation at each step
+- Performance baseline and regression testing
+- Gradual production rollout
+
+**Resources:**
+- [Official Vert.x 4 Migration Guide](https://vertx.io/docs/guides/vertx-4-migration-guide/)
+- [Official Vert.x 5 Migration Guide](https://vertx.io/docs/guides/vertx-5-migration-guide/)
+- [Vert.x 4.0.0 Breaking Changes](https://github.com/vert-x3/wiki/wiki/4.0.0-Deprecations-and-breaking-changes)
+- [Vert.x 5.0.0 Breaking Changes](https://github.com/vert-x3/wiki/wiki/5.0.0-Deprecations-and-breaking-changes)
+- [Vert.x Documentation](https://vertx.io/docs/)
+
+---
+
+**Document Version:** 1.0
+**Last Updated:** 2025-11-14
+**Target Versions:** 3.9.16 → 5.0.4
