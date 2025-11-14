@@ -790,7 +790,18 @@ vertx.<User>executeBlocking(() -> {
 
 ## 4. HTTP Client & Server Changes
 
+The HTTP client API underwent a complete redesign in Vert.x 4.x, moving from a synchronous-style chaining API to a fully async Future-based API. This is one of the most visible changes you'll encounter.
+
+**Major Breaking Changes:**
+- `client.getNow()`, `client.get()`, `client.post()` → **REMOVED**
+- New pattern: `client.request()` → Future → `send()` → Future
+- WebSocket methods moved to separate `WebSocketClient`
+- All operations return `Future` instead of using callbacks
+- HttpMethod changed from enum to interface
+
 ### 4.1 HTTP Client Request Pattern
+
+This is perhaps the most frequently used API in Vert.x applications and has changed significantly.
 
 #### Before (3.9.16)
 ```java
@@ -1055,7 +1066,27 @@ connection.shutdown(5, TimeUnit.SECONDS);  // Requires timeout parameter
 
 ## 5. Database Client Changes
 
+The database client layer was completely rewritten in Vert.x 4.x with a unified reactive SQL client API. This is one of the most significant architectural changes in the migration.
+
+**Critical Changes:**
+- `JDBCClient` → `JDBCPool` (completely new API)
+- `SQLClient` → `Pool` interface
+- `ResultSet` → `RowSet<Row>` (type-safe row access)
+- Configuration: `JsonObject` → `JDBCConnectOptions` + `PoolOptions`
+- Queries: `queryWithParams()` → `preparedQuery().execute(Tuple)`
+- Transactions: Manual commit/rollback → Transaction API with `begin()`/`commit()`
+- Connection pooling: Built-in and automatic
+
+**Why This Changed:**
+- Unified API across all SQL databases (Postgres, MySQL, JDBC, etc.)
+- Better performance with native drivers
+- Type-safe column access (no more string-based `row.getString("col")` errors at runtime)
+- Future-based (no callbacks)
+- Automatic connection pooling
+
 ### 5.1 JDBC Client - Complete Overhaul
+
+This is the most significant change for applications using databases.
 
 #### Before (3.9.16)
 ```java
@@ -1256,6 +1287,149 @@ pool.preparedQuery("SELECT * FROM users")
         }
     });
 ```
+
+### 5.4 Database Migration Tips
+
+**Step-by-Step Migration Guide:**
+
+1. **Update Dependencies First:**
+   ```gradle
+   // Remove
+   implementation 'io.vertx:vertx-sql-common:3.9.16'
+
+   // Update
+   implementation 'io.vertx:vertx-jdbc-client:5.0.4'
+   ```
+
+2. **Replace JDBCClient with JDBCPool:**
+   ```java
+   // Before: JsonObject config
+   JsonObject config = new JsonObject()
+       .put("url", "jdbc:postgresql://localhost/db")
+       .put("user", "user")
+       .put("password", "pass");
+   JDBCClient client = JDBCClient.create(vertx, config);
+
+   // After: Typed configuration
+   JDBCConnectOptions connectOptions = new JDBCConnectOptions()
+       .setJdbcUrl("jdbc:postgresql://localhost/db")
+       .setUser("user")
+       .setPassword("pass");
+
+   PoolOptions poolOptions = new PoolOptions().setMaxSize(10);
+   Pool pool = JDBCPool.pool(vertx, connectOptions, poolOptions);
+   ```
+
+3. **Update Query Patterns:**
+   ```java
+   // Before: callback with ResultSet
+   client.query("SELECT * FROM users", res -> {
+       if (res.succeeded()) {
+           ResultSet rs = res.result();
+           for (JsonObject row : rs.getRows()) {
+               String name = row.getString("name");
+           }
+       }
+   });
+
+   // After: Future with RowSet
+   pool.query("SELECT * FROM users")
+       .execute()
+       .onSuccess(rows -> {
+           for (Row row : rows) {
+               String name = row.getString("name");
+           }
+       });
+   ```
+
+4. **Migrate Parameterized Queries:**
+   ```java
+   // Before: JsonArray params
+   JsonArray params = new JsonArray().add("john@example.com");
+   client.queryWithParams("SELECT * FROM users WHERE email = ?", params, handler);
+
+   // After: Tuple params
+   pool.preparedQuery("SELECT * FROM users WHERE email = ?")
+       .execute(Tuple.of("john@example.com"))
+       .onSuccess(rows -> { ... });
+   ```
+
+5. **Update Transaction Handling:**
+   ```java
+   // Before: Nested callbacks with manual commit
+   client.getConnection(connRes -> {
+       SQLConnection conn = connRes.result();
+       conn.setAutoCommit(false, ar -> {
+           conn.query("...", queryRes -> {
+               conn.commit(commitRes -> {
+                   conn.close();
+               });
+           });
+       });
+   });
+
+   // After: Future composition with Transaction API
+   pool.getConnection()
+       .compose(conn ->
+           conn.begin()
+               .compose(tx ->
+                   conn.query("...").execute()
+                       .compose(rows -> tx.commit())
+               )
+               .eventually(() -> {
+                   conn.close();
+                   return Future.succeededFuture();
+               })
+       );
+   ```
+
+**Common Pitfalls:**
+
+1. **Row Access Pattern Changed:**
+   ```java
+   // WRONG (3.x pattern doesn't work)
+   List<JsonObject> rows = rowSet.getRows();  // Method doesn't exist!
+
+   // CORRECT (5.x pattern)
+   for (Row row : rowSet) {
+       // Process row
+   }
+   ```
+
+2. **Column Names Method:**
+   ```java
+   // WRONG
+   List<String> cols = rowSet.getColumnNames();
+
+   // CORRECT
+   List<String> cols = rowSet.columnsNames();  // Note: different method name
+   ```
+
+3. **Connection Pooling:**
+   - In 3.x: `JDBCClient` internally pooled connections (hidden)
+   - In 5.x: `JDBCPool` explicitly manages pool (visible configuration)
+   - **Action**: Configure pool size explicitly with `PoolOptions`
+
+4. **Batch Operations:**
+   ```java
+   // Before (3.x)
+   client.batch(Arrays.asList("INSERT...", "UPDATE..."), handler);
+
+   // After (5.x) - Use prepared query with list of tuples
+   List<Tuple> batch = Arrays.asList(
+       Tuple.of("user1", "email1"),
+       Tuple.of("user2", "email2")
+   );
+   pool.preparedQuery("INSERT INTO users(name, email) VALUES (?, ?)")
+       .executeBatch(batch)
+       .onSuccess(rows -> { ... });
+   ```
+
+**Performance Benefits in 5.x:**
+- Connection pooling is more efficient
+- Prepared statements are cached
+- Less object allocation (Row vs JsonObject)
+- Native database drivers available (PgClient, MySQLClient)
 
 ---
 
