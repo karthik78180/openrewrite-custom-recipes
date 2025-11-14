@@ -44,8 +44,9 @@ public class VertxFutureModelRecipe extends Recipe {
                 J.Lambda l = super.visitLambda(lambda, ctx);
 
                 // Check if this lambda is an argument to executeBlocking or eventually
-                Cursor parent = getCursor().getParent();
-                if (parent != null && parent.getValue() instanceof J.MethodInvocation mi) {
+                // Use firstEnclosing to find the nearest method invocation in the cursor path
+                J.MethodInvocation mi = getCursor().firstEnclosing(J.MethodInvocation.class);
+                if (mi != null) {
                     if ("executeBlocking".equals(mi.getSimpleName())) {
                         return transformExecuteBlockingLambda(l);
                     } else if ("eventually".equals(mi.getSimpleName())) {
