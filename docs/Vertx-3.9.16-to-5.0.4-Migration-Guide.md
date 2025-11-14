@@ -782,27 +782,7 @@ future1
     });
 ```
 
-### 6.2 Future.eventually()
-
-#### Before (3.9.16 - not available)
-```java
-// Not available in 3.x
-```
-
-#### Introduced in 4.x, Changed in 5.x
-```java
-// 4.x - Function parameter
-future.eventually(v -> {
-    return cleanupOperation();  // Takes parameter (even if unused)
-});
-
-// 5.0.4 - Supplier parameter
-future.eventually(() -> {
-    return cleanupOperation();  // No parameter
-});
-```
-
-### 6.3 Promise Pattern
+### 6.2 Promise Pattern
 
 #### Before (3.9.16)
 ```java
@@ -985,36 +965,7 @@ producer.flush(ar -> {
 });
 ```
 
-### 7.4 MQTT Client
-
-#### Before (3.9.16)
-```java
-import io.vertx.mqtt.MqttClient;
-
-MqttClient client = MqttClient.create(vertx);
-
-// Fluent methods
-client.connect(1883, "mqtt-broker")
-    .publish("topic", Buffer.buffer("message"), 0, false, false)
-    .disconnect();
-```
-
-#### After (5.0.4)
-```java
-import io.vertx.mqtt.MqttClient;
-
-MqttClient client = MqttClient.create(vertx);
-
-// Methods return Future - not fluent
-client.connect(1883, "mqtt-broker")
-    .compose(v -> client.publish("topic", Buffer.buffer("message"), 0, false, false))
-    .compose(v -> client.disconnect())
-    .onSuccess(v -> {
-        // All operations complete
-    });
-```
-
-### 7.5 Redis Client
+### 7.4 Redis Client
 
 #### Before (3.9.16)
 ```java
@@ -1050,7 +1001,7 @@ redis.close()
     });
 ```
 
-### 7.6 RxJava Support
+### 7.5 RxJava Support
 
 #### Before (3.9.16)
 ```java
@@ -1071,7 +1022,7 @@ Vertx rxVertx = Vertx.vertx();
 import io.smallrye.mutiny.vertx.core.AbstractVerticle;
 ```
 
-### 7.7 gRPC
+### 7.6 gRPC
 
 #### Before (3.9.16)
 ```java
@@ -1105,7 +1056,7 @@ public class MyService extends VertxGreeterGrpc.GreeterImplBase {
 }
 ```
 
-### 7.8 Health Checks
+### 7.7 Health Checks
 
 #### Before (3.9.16 & 4.x)
 ```java
