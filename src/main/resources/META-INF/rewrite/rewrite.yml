@@ -2,7 +2,7 @@
 type: specs.openrewrite.org/v1beta/recipe
 name: com.recipies.yaml.AllMigrations
 displayName: Upgrade Gradle to 8.14 and Apply Custom Recipes with Checkstyle Formatting
-description: Comprehensive migration combining Gradle upgrade (8.13), base class transformations, constant updates, Vert.x JDBC migration (3.9.16 to 5.0.5), and Checkstyle-compliant formatting.
+description: Comprehensive migration combining Gradle upgrade (8.13), base class transformations, constant updates, Vert.x migration (3.9.16 to 5.0.5 with Future Model), and Checkstyle-compliant formatting.
 recipeList:
   - org.openrewrite.gradle.UpdateGradleWrapper:
       version: "8.13"
@@ -11,7 +11,7 @@ recipeList:
       distributionType: "bin"
       archivePathPattern: "wrapper/dists"
   - com.rewrite.Java21MigrationRecipes
-  - com.recipies.yaml.VertxJdbcMigrations
+  - com.recipies.yaml.Vertx5CompleteMigration
   - com.recipies.yaml.CheckstyleFormatting
 ---
 type: specs.openrewrite.org/v1beta/recipe
@@ -91,14 +91,9 @@ recipeList:
 ---
 type: specs.openrewrite.org/v1beta/recipe
 name: com.recipies.yaml.Vertx5CompleteMigration
-displayName: Complete Vert.x 3.9.16 to 5.0.4 Migration
-description: Comprehensive migration from Vert.x 3.9.16 to 5.0.4, including JDBC client updates, dependency changes, and future model transformation.
+displayName: Complete Vert.x 3.9.16 to 5.0.5 Migration
+description: Comprehensive migration from Vert.x 3.9.16 to 5.0.5, including JDBC client updates, dependency changes, and future model transformation.
 recipeList:
-  # Update vertx-core dependency to 5.0.4
-  - org.openrewrite.gradle.UpgradeDependencyVersion:
-      groupId: io.vertx
-      artifactId: vertx-core
-      newVersion: 5.0.4
-  # Apply all migrations
+  # Apply all migrations (VertxJdbcMigrations already handles version upgrade to 5.0.5)
   - com.recipies.yaml.VertxJdbcMigrations
   - com.recipies.yaml.VertxFutureModelMigration
