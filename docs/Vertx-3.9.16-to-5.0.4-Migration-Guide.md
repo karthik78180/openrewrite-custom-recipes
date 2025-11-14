@@ -34,72 +34,7 @@ This document provides a detailed migration guide for upgrading from **Vert.x 3.
 
 ## 1. Dependency Changes
 
-### 1.1 Core Dependencies (Maven)
-
-#### Before (3.9.16)
-```xml
-<properties>
-    <vertx.version>3.9.16</vertx.version>
-</properties>
-
-<dependencies>
-    <dependency>
-        <groupId>io.vertx</groupId>
-        <artifactId>vertx-core</artifactId>
-        <version>${vertx.version}</version>
-    </dependency>
-    <dependency>
-        <groupId>io.vertx</groupId>
-        <artifactId>vertx-web</artifactId>
-        <version>${vertx.version}</version>
-    </dependency>
-    <dependency>
-        <groupId>io.vertx</groupId>
-        <artifactId>vertx-jdbc-client</artifactId>
-        <version>${vertx.version}</version>
-    </dependency>
-    <dependency>
-        <groupId>io.vertx</groupId>
-        <artifactId>vertx-sql-common</artifactId>
-        <version>${vertx.version}</version>
-    </dependency>
-</dependencies>
-```
-
-#### After (5.0.4)
-```xml
-<properties>
-    <vertx.version>5.0.4</vertx.version>
-</properties>
-
-<dependencies>
-    <dependency>
-        <groupId>io.vertx</groupId>
-        <artifactId>vertx-core</artifactId>
-        <version>${vertx.version}</version>
-    </dependency>
-    <dependency>
-        <groupId>io.vertx</groupId>
-        <artifactId>vertx-web</artifactId>
-        <version>${vertx.version}</version>
-    </dependency>
-    <dependency>
-        <groupId>io.vertx</groupId>
-        <artifactId>vertx-jdbc-client</artifactId>
-        <version>${vertx.version}</version>
-    </dependency>
-    <!-- vertx-sql-common REMOVED - merged into vertx-jdbc-client in 4.x -->
-
-    <!-- Jackson Databind now OPTIONAL - add explicitly if using JSON mapping -->
-    <dependency>
-        <groupId>com.fasterxml.jackson.core</groupId>
-        <artifactId>jackson-databind</artifactId>
-        <version>2.15.2</version>
-    </dependency>
-</dependencies>
-```
-
-### 1.2 Core Dependencies (Gradle)
+### 1.1 Core Dependencies (Gradle)
 
 #### Before (3.9.16)
 ```gradle
@@ -117,42 +52,65 @@ dependencies {
     implementation 'io.vertx:vertx-core:5.0.4'
     implementation 'io.vertx:vertx-web:5.0.4'
     implementation 'io.vertx:vertx-jdbc-client:5.0.4'
-    // vertx-sql-common REMOVED
+    // vertx-sql-common REMOVED - merged into vertx-jdbc-client in 4.x
 
-    // Jackson Databind - add if using JSON object mapping
+    // Jackson Databind - now OPTIONAL (required in 3.x, optional in 4.x+)
+    // Add explicitly if using JSON object mapping
     implementation 'com.fasterxml.jackson.core:jackson-databind:2.15.2'
 }
 ```
 
-### 1.3 Removed Dependencies
+### 1.2 Removed Dependencies (Complete Removal)
 
-| Dependency | Status | Alternative |
-|------------|--------|-------------|
-| `vertx-sql-common` | **REMOVED in 4.x** | Merged into `vertx-jdbc-client` |
-| `vertx-sync` | **REMOVED in 5.x** | Use Virtual Threads (Java 21+) or reactive patterns |
-| `vertx-service-factory` | **REMOVED in 5.x** | Use standard deployment patterns |
-| `vertx-maven-service-factory` | **REMOVED in 5.x** | Use standard dependency management |
-| `vertx-http-service-factory` | **REMOVED in 5.x** | Use standard deployment patterns |
+These dependencies have been **completely removed** and have no direct replacement:
 
-### 1.4 Module Renames & Replacements
+| Dependency | Removed In | Alternative |
+|------------|------------|-------------|
+| `io.vertx:vertx-sql-common` | **4.0** | Functionality merged into `vertx-jdbc-client` |
+| `io.vertx:vertx-sync` | **5.0** | Use Virtual Threads (Java 21+) or stay with reactive patterns |
+| `io.vertx:vertx-service-factory` | **5.0** | Use standard Verticle deployment |
+| `io.vertx:vertx-maven-service-factory` | **5.0** | Use standard Maven dependency management |
+| `io.vertx:vertx-http-service-factory` | **5.0** | Use standard HTTP-based deployment |
+| Vert.x CLI (`vertx` command-line tool) | **5.0** | Use Maven/Gradle plugins or `VertxApplication` |
 
-| Old Module (3.x) | New Module (5.x) | Notes |
-|------------------|------------------|-------|
+**Important:** Jackson Databind (`com.fasterxml.jackson.core:jackson-databind`) changed from:
+- **3.x**: Transitive dependency (included automatically)
+- **4.x+**: Optional dependency (must add explicitly if needed)
+
+### 1.3 Deprecated/Sunset Components (Still Available but Discouraged)
+
+These are still supported in 5.x but **discouraged** and may be removed in 6.x:
+
+| Component | Status | Migration Path |
+|-----------|--------|----------------|
+| gRPC Netty (`vertx-grpc`) | **Sunset** | Migrate to Vert.x gRPC client/server |
+| RxJava 2 (`vertx-rx-java2`) | **Sunset** | Migrate to Mutiny or RxJava 3 |
+| OpenTracing (`vertx-opentracing`) | **Sunset** | Migrate to OpenTelemetry |
+| Vert.x Unit (`vertx-unit`) | **Sunset** | Migrate to JUnit 5 with `vertx-junit5` |
+
+### 1.4 Module Replacements (Different Artifact)
+
+Modules that were renamed or completely rewritten:
+
+| Old Module (3.x) | New Module (5.x) | Change Type |
+|------------------|------------------|-------------|
 | `vertx-web-api-contract` | `vertx-web-openapi` | Complete rewrite with new API |
-| RxJava 1 support | RxJava 3 or Mutiny | RxJava 1 & 2 support removed |
-| `vertx-opentracing` | `vertx-opentelemetry` | OpenTracing deprecated |
-| gRPC Netty | Vert.x gRPC client/server | New native implementation |
-| `vertx-unit` | JUnit 5 integration | Modern testing framework |
+| `vertx-rx-java` (RxJava 1) | `vertx-rx-java3` | RxJava 1 & 2 removed, only RxJava 3 supported |
+| `vertx-lang-kotlin-coroutines` | Built-in Kotlin coroutines | Generated suspending extensions removed |
 
-### 1.5 Third-Party Dependency Updates
+### 1.5 Updated Dependencies (Version Changes with Breaking Changes)
 
-| Library | 3.9.16 Version | 5.0.4 Version | Impact |
-|---------|----------------|---------------|--------|
-| Netty | 4.1.x | 4.1.100+ | Minor - mostly internal |
-| Jackson | 2.11.x | 2.15.x | **Breaking changes in serialization** |
-| Hazelcast | 3.x/4.x | 5.3.2+ | **Requires Java 11+** |
-| MongoDB Driver | 3.x/4.x | 5.x | **Breaking API changes** |
-| GraphQL-Java | 15.x | 23.x | **Breaking API changes** |
+Third-party libraries that have **breaking changes** between versions:
+
+| Library | 3.9.16 Version | 5.0.4 Version | Impact Level | Key Changes |
+|---------|----------------|---------------|--------------|-------------|
+| **Netty** | 4.1.x | 4.1.100+ | **LOW** | Mostly internal changes |
+| **Jackson** | 2.11.x | 2.15.x | **MEDIUM** | Serialization behavior changes |
+| **Hazelcast** | 3.x/4.x | 5.3.2+ | **HIGH** | **Requires Java 11+**, API changes |
+| **MongoDB Driver** | 3.x/4.x | 5.x | **HIGH** | Complete API overhaul |
+| **GraphQL-Java** | 15.x | 23.x | **HIGH** | Breaking changes in v20, v22, v23 |
+| **Micrometer** | 1.x | 1.14+ | **MEDIUM** | Metric naming changes |
+| **PostgreSQL JDBC** | External | Built-in SCRAM | **LOW** | SCRAM auth now built-in, remove `com.ongres.scram:client` |
 
 ---
 
