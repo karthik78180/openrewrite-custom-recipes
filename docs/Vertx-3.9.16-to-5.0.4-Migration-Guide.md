@@ -24,14 +24,11 @@ This document provides a detailed migration guide for upgrading from **Vert.x 3.
 3. [Core API Changes](#3-core-api-changes)
 4. [HTTP Client & Server Changes](#4-http-client--server-changes)
 5. [Database Client Changes](#5-database-client-changes)
-6. [Authentication & Authorization Changes](#6-authentication--authorization-changes)
-7. [Messaging & Event Bus Changes](#7-messaging--event-bus-changes)
-8. [Web Framework Changes](#8-web-framework-changes)
-9. [Async Programming Model Changes](#9-async-programming-model-changes)
-10. [Module-Specific Changes](#10-module-specific-changes)
-11. [Migration Strategy](#11-migration-strategy)
-12. [Testing & Validation](#12-testing--validation)
-13. [Breaking Changes Quick Reference](#13-breaking-changes-quick-reference)
+6. [Async Programming Model Changes](#6-async-programming-model-changes)
+7. [Module-Specific Changes](#7-module-specific-changes)
+8. [Migration Strategy](#8-migration-strategy)
+9. [Testing & Validation](#9-testing--validation)
+10. [Breaking Changes Quick Reference](#10-breaking-changes-quick-reference)
 
 ---
 
@@ -973,549 +970,9 @@ pool.preparedQuery("SELECT * FROM users")
 
 ---
 
-## 6. Authentication & Authorization Changes
+## 6. Async Programming Model Changes
 
-### 6.1 AuthProvider Split
-
-#### Before (3.9.16)
-```java
-import io.vertx.ext.auth.AuthProvider;
-import io.vertx.ext.auth.User;
-
-// Single provider for both authentication and authorization
-AuthProvider authProvider = JDBCAuth.create(vertx, client);
-
-// Authenticate
-JsonObject credentials = new JsonObject()
-    .put("username", "john")
-    .put("password", "secret");
-
-authProvider.authenticate(credentials, res -> {
-    if (res.succeeded()) {
-        User user = res.result();
-
-        // Authorize with same provider
-        user.isAuthorized("read:users", authRes -> {
-            if (authRes.succeeded() && authRes.result()) {
-                // User is authorized
-            }
-        });
-    }
-});
-```
-
-#### After (5.0.4)
-```java
-import io.vertx.ext.auth.authentication.AuthenticationProvider;
-import io.vertx.ext.auth.authorization.AuthorizationProvider;
-import io.vertx.ext.auth.authorization.PermissionBasedAuthorization;
-import io.vertx.ext.auth.User;
-
-// Separate providers for authentication and authorization
-AuthenticationProvider authProvider = JDBCAuthentication.create(client, new JDBCAuthenticationOptions());
-AuthorizationProvider authzProvider = JDBCAuthorization.create(client, new JDBCAuthorizationOptions());
-
-// Authenticate
-JsonObject credentials = new JsonObject()
-    .put("username", "john")
-    .put("password", "secret");
-
-authProvider.authenticate(credentials)
-    .onSuccess(user -> {
-        // Get authorizations from separate provider
-        authzProvider.getAuthorizations(user)
-            .onSuccess(v -> {
-                // Check authorization
-                if (PermissionBasedAuthorization.create("read:users").match(user)) {
-                    // User is authorized
-                }
-            });
-    });
-```
-
-### 6.2 JWT Authentication
-
-#### Before (3.9.16)
-```java
-import io.vertx.ext.auth.jwt.JWTAuth;
-import io.vertx.ext.auth.jwt.JWTOptions;
-
-JWTAuthOptions config = new JWTAuthOptions()
-    .addPubSecKey(new PubSecKeyOptions()
-        .setAlgorithm("HS256")
-        .setBuffer("secret-key"));
-
-JWTAuth provider = JWTAuth.create(vertx, config);
-
-// Generate token
-String token = provider.generateToken(
-    new JsonObject().put("sub", "user123"),
-    new JWTOptions().setExpiresInSeconds(3600)
-);
-
-// Verify token
-provider.authenticate(new JsonObject().put("jwt", token), res -> {
-    if (res.succeeded()) {
-        User user = res.result();
-    }
-});
-```
-
-#### After (5.0.4)
-```java
-import io.vertx.ext.auth.jwt.JWTAuth;
-import io.vertx.ext.jwt.JWTOptions;  // Package changed!
-import io.vertx.ext.auth.PubSecKeyOptions;
-
-JWTAuthOptions config = new JWTAuthOptions()
-    .addPubSecKey(new PubSecKeyOptions()
-        .setAlgorithm("HS256")
-        .setBuffer("secret-key"));
-
-JWTAuth provider = JWTAuth.create(vertx, config);
-
-// Generate token
-String token = provider.generateToken(
-    new JsonObject().put("sub", "user123"),
-    new JWTOptions().setExpiresInSeconds(3600)  // Note: JWTOptions from different package
-);
-
-// Verify token - returns Future
-JsonObject credentials = new JsonObject().put("jwt", token);
-provider.authenticate(credentials)
-    .onSuccess(user -> {
-        // Use user
-    })
-    .onFailure(err -> {
-        // Handle auth failure
-    });
-```
-
-### 6.3 OAuth2 Authentication
-
-#### Before (3.9.16)
-```java
-import io.vertx.ext.auth.oauth2.OAuth2Auth;
-import io.vertx.ext.auth.oauth2.OAuth2FlowType;
-import io.vertx.ext.auth.oauth2.OAuth2ClientOptions;
-
-OAuth2ClientOptions clientOptions = new OAuth2ClientOptions()
-    .setClientID("client-id")
-    .setClientSecret("client-secret")
-    .setSite("https://oauth-provider.com");
-
-OAuth2Auth oauth2 = OAuth2Auth.create(vertx, OAuth2FlowType.AUTH_CODE, clientOptions);
-```
-
-#### After (5.0.4)
-```java
-import io.vertx.ext.auth.oauth2.OAuth2Auth;
-import io.vertx.ext.auth.oauth2.OAuth2Options;
-
-// New options structure
-OAuth2Options oauth2Options = new OAuth2Options()
-    .setClientId("client-id")
-    .setClientSecret("client-secret")
-    .setSite("https://oauth-provider.com")
-    .setFlow(OAuth2FlowType.AUTH_CODE);
-
-OAuth2Auth oauth2 = OAuth2Auth.create(vertx, oauth2Options);
-
-// OAuth2Auth.create() now requires Vertx instance for secure random generation
-```
-
----
-
-## 7. Messaging & Event Bus Changes
-
-### 7.1 Event Bus Request-Response
-
-#### Before (3.9.16)
-```java
-EventBus eb = vertx.eventBus();
-
-// Request-response using send()
-eb.send("address", "message", reply -> {
-    if (reply.succeeded()) {
-        Message<String> response = reply.result();
-        System.out.println("Reply: " + response.body());
-    }
-});
-
-// Reply to reply (chained request-response)
-eb.consumer("address", message -> {
-    message.reply("response", replyToReply -> {
-        if (replyToReply.succeeded()) {
-            // Handle reply to reply
-        }
-    });
-});
-```
-
-#### After (5.0.4)
-```java
-EventBus eb = vertx.eventBus();
-
-// send() with handler REMOVED - use request()
-eb.request("address", "message")
-    .onSuccess(reply -> {
-        System.out.println("Reply: " + reply.body());
-    })
-    .onFailure(err -> {
-        System.err.println("No reply: " + err.getMessage());
-    });
-
-// Reply to reply using replyAndRequest()
-eb.consumer("address", message -> {
-    message.replyAndRequest("response")
-        .onSuccess(replyToReply -> {
-            // Handle reply to reply
-        });
-});
-```
-
-### 7.2 Message Consumer Configuration
-
-#### Before (3.9.16 & 4.x)
-```java
-MessageConsumer<String> consumer = eb.consumer("address");
-
-// Set max buffered messages after creation
-consumer.setMaxBufferedMessages(2000);
-
-consumer.handler(message -> {
-    // Handle message
-});
-```
-
-#### After (5.0.4)
-```java
-// Must configure at creation time
-MessageConsumerOptions options = new MessageConsumerOptions()
-    .setMaxBufferedMessages(2000);
-
-MessageConsumer<String> consumer = eb.consumer("address", options);
-
-consumer.handler(message -> {
-    // Handle message
-});
-
-// setMaxBufferedMessages() removed - must be set at creation
-```
-
-### 7.3 MessageProducer Changes
-
-#### Before (3.9.16)
-```java
-MessageProducer<String> producer = eb.sender("address");
-
-// MessageProducer extends WriteStream
-producer.write("message1");
-producer.write("message2");
-producer.end("final message");
-```
-
-#### After (5.0.4)
-```java
-MessageProducer<String> producer = eb.sender("address");
-
-// MessageProducer NO LONGER extends WriteStream
-// Use send() instead of write()
-producer.send("message1");
-producer.send("message2");
-producer.send("final message");
-
-// close() replaces end()
-producer.close();
-```
-
-### 7.4 WriteStream Methods Return Types
-
-#### Before (3.9.16)
-```java
-WriteStream<Buffer> stream = ...;
-
-// Fluent chaining
-stream.write(buffer1)
-    .write(buffer2)
-    .write(buffer3)
-    .end();
-```
-
-#### After (5.0.4)
-```java
-WriteStream<Buffer> stream = ...;
-
-// write() returns void or Future<Void> - NOT fluent
-stream.write(buffer1);
-stream.write(buffer2);
-stream.write(buffer3);
-stream.end();
-
-// Or using Future-based API
-stream.write(buffer1)
-    .compose(v -> stream.write(buffer2))
-    .compose(v -> stream.write(buffer3))
-    .compose(v -> stream.end())
-    .onSuccess(v -> System.out.println("Done"));
-```
-
----
-
-## 8. Web Framework Changes
-
-### 8.1 Session Handler
-
-#### Before (3.9.16)
-```java
-import io.vertx.ext.web.handler.SessionHandler;
-import io.vertx.ext.web.handler.UserSessionHandler;
-import io.vertx.ext.web.sstore.LocalSessionStore;
-
-Router router = Router.router(vertx);
-
-// Session handler
-SessionHandler sessionHandler = SessionHandler.create(
-    LocalSessionStore.create(vertx)
-);
-router.route().handler(sessionHandler);
-
-// User session handler (separate)
-router.route().handler(UserSessionHandler.create(authProvider));
-```
-
-#### After (5.0.4)
-```java
-import io.vertx.ext.web.handler.SessionHandler;
-import io.vertx.ext.web.sstore.LocalSessionStore;
-
-Router router = Router.router(vertx);
-
-// UserSessionHandler REMOVED - functionality merged into SessionHandler
-SessionHandler sessionHandler = SessionHandler.create(
-    LocalSessionStore.create(vertx)
-);
-router.route().handler(sessionHandler);
-
-// No separate UserSessionHandler needed
-```
-
-### 8.2 Cookie Handling
-
-#### Before (3.9.16)
-```java
-import io.vertx.ext.web.Cookie;
-import io.vertx.ext.web.handler.CookieHandler;
-
-Router router = Router.router(vertx);
-
-// Cookie handler
-router.route().handler(CookieHandler.create());
-
-router.route().handler(ctx -> {
-    Cookie cookie = Cookie.cookie("name", "value");
-    ctx.addCookie(cookie);
-
-    // Get all cookies as map
-    Map<String, Cookie> cookieMap = ctx.cookieMap();
-});
-```
-
-#### After (5.0.4)
-```java
-import io.vertx.core.http.Cookie;  // Moved to core!
-// CookieHandler REMOVED
-
-Router router = Router.router(vertx);
-
-// No CookieHandler needed - cookies handled automatically
-
-router.route().handler(ctx -> {
-    Cookie cookie = Cookie.cookie("name", "value");
-    ctx.response().addCookie(cookie);
-
-    // cookieMap() REMOVED - use cookies() returning Set
-    Set<Cookie> cookies = ctx.request().cookies();
-
-    // Get specific cookie
-    Cookie sessionCookie = ctx.request().getCookie("JSESSIONID");
-});
-```
-
-### 8.3 Static Handler
-
-#### Before (3.9.16)
-```java
-import io.vertx.ext.web.handler.StaticHandler;
-
-Router router = Router.router(vertx);
-
-// Create static handler
-StaticHandler staticHandler = StaticHandler.create();
-router.route("/static/*").handler(staticHandler);
-
-// With custom classloader (OSGi support)
-StaticHandler customHandler = StaticHandler.create("webroot", classLoader);
-```
-
-#### After (5.0.4)
-```java
-import io.vertx.ext.web.handler.StaticHandler;
-
-Router router = Router.router(vertx);
-
-// Create static handler (unchanged)
-StaticHandler staticHandler = StaticHandler.create();
-router.route("/static/*").handler(staticHandler);
-
-// ClassLoader overload REMOVED - use filesystem or classpath
-StaticHandler fsHandler = StaticHandler.create("/var/www/static");
-```
-
-### 8.4 Favicon & Error Handlers
-
-#### Before (3.9.16)
-```java
-import io.vertx.ext.web.handler.FaviconHandler;
-import io.vertx.ext.web.handler.ErrorHandler;
-
-Router router = Router.router(vertx);
-
-// No Vertx instance required
-router.route().handler(FaviconHandler.create());
-router.route().failureHandler(ErrorHandler.create());
-```
-
-#### After (5.0.4)
-```java
-import io.vertx.ext.web.handler.FaviconHandler;
-import io.vertx.ext.web.handler.ErrorHandler;
-
-Router router = Router.router(vertx);
-
-// Require Vertx instance
-router.route().handler(FaviconHandler.create(vertx));
-router.route().failureHandler(ErrorHandler.create(vertx));
-```
-
-### 8.5 Template Engines
-
-#### Before (3.9.16)
-```java
-import io.vertx.ext.web.templ.HandlebarsTemplateEngine;
-
-HandlebarsTemplateEngine engine = HandlebarsTemplateEngine.create();
-
-// Direct access to underlying engine
-com.github.jknack.handlebars.Handlebars handlebars = engine.getHandlebars();
-handlebars.registerHelper("myHelper", (context, options) -> {
-    // Custom helper
-});
-```
-
-#### After (5.0.4)
-```java
-import io.vertx.ext.web.templ.handlebars.HandlebarsTemplateEngine;
-
-HandlebarsTemplateEngine engine = HandlebarsTemplateEngine.create(vertx);
-
-// Use unwrap() for all template engines
-com.github.jknack.handlebars.Handlebars handlebars = engine.unwrap();
-handlebars.registerHelper("myHelper", (context, options) -> {
-    // Custom helper
-});
-```
-
-### 8.6 SockJS Handler
-
-#### Before (3.9.16)
-```java
-import io.vertx.ext.web.handler.sockjs.SockJSHandler;
-import io.vertx.ext.web.handler.sockjs.BridgeOptions;
-
-Router router = Router.router(vertx);
-
-SockJSHandler sockJSHandler = SockJSHandler.create(vertx);
-
-// Event bus bridge
-BridgeOptions options = new BridgeOptions()
-    .addInboundPermitted(new PermittedOptions().setAddress("chat.messages"))
-    .addOutboundPermitted(new PermittedOptions().setAddress("chat.messages"));
-
-sockJSHandler.bridge(options);
-router.route("/eventbus/*").handler(sockJSHandler);
-```
-
-#### After (5.0.4)
-```java
-import io.vertx.ext.web.handler.sockjs.SockJSHandler;
-import io.vertx.ext.web.handler.sockjs.SockJSBridgeOptions;  // Renamed!
-
-Router router = Router.router(vertx);
-
-SockJSHandler sockJSHandler = SockJSHandler.create(vertx);
-
-// BridgeOptions renamed to SockJSBridgeOptions
-SockJSBridgeOptions options = new SockJSBridgeOptions()
-    .addInboundPermitted(new PermittedOptions().setAddress("chat.messages"))
-    .addOutboundPermitted(new PermittedOptions().setAddress("chat.messages"));
-
-sockJSHandler.bridge(options);
-router.route("/eventbus/*").handler(sockJSHandler);
-
-// Event bus handler registration now explicit
-SockJSHandlerOptions handlerOptions = new SockJSHandlerOptions()
-    .setRegisterWriteHandler(true);  // Enable event bus registration
-SockJSHandler customHandler = SockJSHandler.create(vertx, handlerOptions);
-```
-
-### 8.7 OpenAPI / API Contract
-
-#### Before (3.9.16)
-```java
-import io.vertx.ext.web.api.contract.openapi3.OpenAPI3RouterFactory;
-
-OpenAPI3RouterFactory.create(vertx, "api.yaml", ar -> {
-    if (ar.succeeded()) {
-        OpenAPI3RouterFactory routerFactory = ar.result();
-
-        // Add handler by operation ID
-        routerFactory.addHandlerByOperationId("getPets", ctx -> {
-            ctx.response().end(petsJson);
-        });
-
-        // Add security handler
-        routerFactory.addSecurityHandler("bearerAuth", securityHandler);
-
-        Router router = routerFactory.getRouter();
-    }
-});
-```
-
-#### After (5.0.4)
-```java
-import io.vertx.ext.web.openapi.router.RouterBuilder;
-
-// New module: vertx-web-openapi (replaces vertx-web-api-contract)
-RouterBuilder.create(vertx, "api.yaml")
-    .onSuccess(routerBuilder -> {
-        // operation() replaces addHandlerByOperationId()
-        routerBuilder.operation("getPets").handler(ctx -> {
-            ctx.response().end(petsJson);
-        });
-
-        // securityHandler() replaces addSecurityHandler()
-        routerBuilder.securityHandler("bearerAuth", securityHandler);
-
-        Router router = routerBuilder.createRouter();
-    });
-```
-
----
-
-## 9. Async Programming Model Changes
-
-### 9.1 Future Composition
+### 6.1 Future Composition
 
 #### Before (3.9.16)
 ```java
@@ -1551,7 +1008,7 @@ future1
     });
 ```
 
-### 9.2 Future.eventually()
+### 6.2 Future.eventually()
 
 #### Before (3.9.16 - not available)
 ```java
@@ -1571,7 +1028,7 @@ future.eventually(() -> {
 });
 ```
 
-### 9.3 Promise Pattern
+### 6.3 Promise Pattern
 
 #### Before (3.9.16)
 ```java
@@ -1627,9 +1084,9 @@ public void modernMethod(Handler<AsyncResult<String>> handler) {
 
 ---
 
-## 10. Module-Specific Changes
+## 7. Module-Specific Changes
 
-### 10.1 Circuit Breaker
+### 7.1 Circuit Breaker
 
 #### Before (3.9.16)
 ```java
@@ -1680,7 +1137,7 @@ breaker.executeWithFallback(
 });
 ```
 
-### 10.2 Service Discovery
+### 7.2 Service Discovery
 
 #### Before (3.9.16)
 ```java
@@ -1717,7 +1174,7 @@ discovery.registerServiceImporter(importer, config)
     });
 ```
 
-### 10.3 Kafka Client
+### 7.3 Kafka Client
 
 #### Before (3.9.16)
 ```java
@@ -1754,7 +1211,7 @@ producer.flush(ar -> {
 });
 ```
 
-### 10.4 MQTT Client
+### 7.4 MQTT Client
 
 #### Before (3.9.16)
 ```java
@@ -1783,7 +1240,7 @@ client.connect(1883, "mqtt-broker")
     });
 ```
 
-### 10.5 Redis Client
+### 7.5 Redis Client
 
 #### Before (3.9.16)
 ```java
@@ -1819,7 +1276,7 @@ redis.close()
     });
 ```
 
-### 10.6 RxJava Support
+### 7.6 RxJava Support
 
 #### Before (3.9.16)
 ```java
@@ -1840,7 +1297,7 @@ Vertx rxVertx = Vertx.vertx();
 import io.smallrye.mutiny.vertx.core.AbstractVerticle;
 ```
 
-### 10.7 gRPC
+### 7.7 gRPC
 
 #### Before (3.9.16)
 ```java
@@ -1874,7 +1331,7 @@ public class MyService extends VertxGreeterGrpc.GreeterImplBase {
 }
 ```
 
-### 10.8 Health Checks
+### 7.8 Health Checks
 
 #### Before (3.9.16 & 4.x)
 ```java
@@ -1913,9 +1370,9 @@ healthCheckHandler.register("database", promise -> {
 
 ---
 
-## 11. Migration Strategy
+## 8. Migration Strategy
 
-### 11.1 Recommended Approach
+### 8.1 Recommended Approach
 
 **Step 1: Prepare (1-2 weeks)**
 1. Audit current Vert.x usage across codebase
@@ -1952,7 +1409,7 @@ healthCheckHandler.register("database", promise -> {
 3. Gradual rollout (20% → 50% → 100%)
 4. Full production deployment
 
-### 11.2 Direct Migration (3.9.16 → 5.0.4)
+### 8.2 Direct Migration (3.9.16 → 5.0.4)
 
 **NOT RECOMMENDED** but possible for small projects:
 
@@ -1964,7 +1421,7 @@ healthCheckHandler.register("database", promise -> {
 
 **Risk:** Very high - too many breaking changes at once
 
-### 11.3 OpenRewrite Migration Recipe
+### 8.3 OpenRewrite Migration Recipe
 
 Use the existing OpenRewrite recipes in this project:
 
@@ -1989,9 +1446,9 @@ recipeList:
 
 ---
 
-## 12. Testing & Validation
+## 9. Testing & Validation
 
-### 12.1 Unit Testing Changes
+### 9.1 Unit Testing Changes
 
 #### Before (3.9.16)
 ```java
@@ -2034,7 +1491,7 @@ public class MyTest {
 }
 ```
 
-### 12.2 Test Success Handlers
+### 9.2 Test Success Handlers
 
 #### Before (4.x)
 ```java
@@ -2048,7 +1505,7 @@ someAsyncOperation()
     .onComplete(testContext.succeedingThenComplete());
 ```
 
-### 12.3 Recommended Test Strategy
+### 9.3 Recommended Test Strategy
 
 1. **Unit Tests:**
    - Test all Vert.x API usage
@@ -2074,9 +1531,9 @@ someAsyncOperation()
 
 ---
 
-## 13. Breaking Changes Quick Reference
+## 10. Breaking Changes Quick Reference
 
-### 13.1 Critical Breaking Changes
+### 10.1 Critical Breaking Changes
 
 | Category | Change | Impact | Effort |
 |----------|--------|--------|--------|
@@ -2089,7 +1546,7 @@ someAsyncOperation()
 | **Worker** | `setWorker()` → `setThreadingModel()` | MEDIUM | LOW |
 | **Execute Blocking** | Promise → Callable | MEDIUM | LOW |
 
-### 13.2 Removed APIs
+### 10.2 Removed APIs
 
 | API | Removed In | Replacement |
 |-----|-----------|-------------|
@@ -2104,7 +1561,7 @@ someAsyncOperation()
 | `FileSystem.deleteRecursive(path, boolean)` | 5.0 | `delete()` or `deleteRecursive()` |
 | CLI framework | 5.0 | Use Picocli or similar |
 
-### 13.3 Package Moves
+### 10.3 Package Moves
 
 | Old Package | New Package | Version |
 |-------------|-------------|---------|
