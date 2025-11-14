@@ -14,6 +14,9 @@ import java.util.List;
  * - Vert.x JDBC client migration (3.9.16 to 5.0.5):
  *   - API changes from JDBCClient to JDBCPool
  *   - Import statement updates (handled via rewrite.yml as com.rewrite.VertxJdbcImportMigration)
+ *
+ * Note: Checkstyle-compliant formatting is applied via the YAML recipe (com.recipies.yaml.CheckstyleFormatting)
+ * when using com.recipies.yaml.AllMigrations.
  */
 public class Java21MigrationRecipes extends Recipe {
     @Override

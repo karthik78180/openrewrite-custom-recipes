@@ -1,8 +1,8 @@
 ---
 type: specs.openrewrite.org/v1beta/recipe
 name: com.recipies.yaml.AllMigrations
-displayName: Upgrade Gradle to 8.14 and Apply Custom Recipes
-description: Comprehensive migration combining Gradle upgrade (8.14), base class transformations, constant updates, and Vert.x JDBC migration (3.9.16 to 5.0.5).
+displayName: Upgrade Gradle to 8.14 and Apply Custom Recipes with Checkstyle Formatting
+description: Comprehensive migration combining Gradle upgrade (8.13), base class transformations, constant updates, Vert.x JDBC migration (3.9.16 to 5.0.5), and Checkstyle-compliant formatting.
 recipeList:
   - org.openrewrite.gradle.UpdateGradleWrapper:
       version: "8.13"
@@ -12,6 +12,7 @@ recipeList:
       archivePathPattern: "wrapper/dists"
   - com.rewrite.Java21MigrationRecipes
   - com.recipies.yaml.VertxJdbcMigrations
+  - com.recipies.yaml.CheckstyleFormatting
 ---
 type: specs.openrewrite.org/v1beta/recipe
 name: com.recipies.yaml.VertxJdbcMigrations
@@ -52,3 +53,30 @@ recipeList:
   - org.openrewrite.java.ChangeType:
       oldFullyQualifiedTypeName: io.vertx.ext.sql.SQLConnection
       newFullyQualifiedTypeName: io.vertx.sqlclient.SqlConnection
+---
+type: specs.openrewrite.org/v1beta/recipe
+name: com.recipies.yaml.CheckstyleFormatting
+displayName: Apply Checkstyle formatting and Java code style rules
+description: >-
+  Comprehensive recipe for applying Checkstyle-compliant formatting to Java code.
+  Enforces: no consecutive blank lines, proper indentation,
+  proper import ordering, modifier order, and code style standards.
+recipeList:
+  # Automatic Java code formatting with proper indentation
+  - org.openrewrite.java.format.AutoFormat
+  # Ensure proper spacing in blank lines (max 1 consecutive blank line)
+  - org.openrewrite.java.format.BlankLines:
+      maxConsecutiveBlankLines: 1
+  # Ensure empty newline at end of file
+  - org.openrewrite.java.format.EmptyNewlineAtEndOfFile
+  - org.openrewrite.java.format.RemoveTrailingWhitespace
+  # Ensure proper import ordering (matches Checkstyle ImportOrder configuration)
+  - org.openrewrite.java.OrderImports:
+      groups:
+        - "*"
+        - "javax"
+        - "java"
+      separatedStaticGroups: true
+      sortStaticImportsAlphabetically: true
+      removeUnusedImports: true
+      removeUnusedNamedImports: true
