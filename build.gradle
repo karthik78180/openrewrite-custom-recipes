@@ -27,6 +27,10 @@ dependencies {
     implementation platform("org.openrewrite:rewrite-bom:${libs.versions.openrewrite.bom.get()}")
     implementation libs.openrewrite.java
     implementation libs.openrewrite.gradle
+    implementation libs.openrewrite.yaml
+    implementation libs.openrewrite.migrate.java
+    implementation libs.openrewrite.static.analysis
+    implementation libs.openrewrite.json
 
     testImplementation libs.openrewrite.test
     testImplementation libs.junit.jupiter.api

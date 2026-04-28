@@ -1,0 +1,27 @@
+---
+type: specs.openrewrite.org/v1beta/style
+name: com.rewrite.repoMaintenance.checkstyle.RepoCheckstyleStyle
+displayName: Repo checkstyle-derived style
+description: Style settings derived from the project's Checkstyle configuration.
+styleConfigs:
+  - org.openrewrite.java.style.TabsAndIndentsStyle:
+      useTabCharacter: false
+      tabSize: 2
+      indentSize: 2
+      continuationIndent: 4
+  - org.openrewrite.java.style.ImportLayoutStyle:
+      classCountToUseStarImport: 999
+      nameCountToUseStarImport: 999
+      layout:
+        - import all other imports
+        - <blank line>
+        - import javax.*
+        - <blank line>
+        - import java.*
+        - <blank line>
+        - import static all other imports
+  - org.openrewrite.java.style.SpacesStyle: {}
+  - org.openrewrite.java.style.BlankLinesStyle:
+      keepMaximum:
+        inDeclarations: 1
+        inCode: 1
