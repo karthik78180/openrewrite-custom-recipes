@@ -20,7 +20,11 @@ java {
 }
 
 dependencies {
-    implementation platform(libs.openrewrite.bom)
+    constraints {
+        implementation(libs.jackson.core)
+    }
+
+    implementation platform("org.openrewrite:rewrite-bom:${libs.versions.openrewrite.bom.get()}")
     implementation libs.openrewrite.java
     implementation libs.openrewrite.gradle
 
@@ -37,7 +41,7 @@ dependencies {
 // Publish to local Maven repository (~/.m2)
 publishing {
     publications {
-        mavenJava(MavenPublication) {
+        create("mavenJava", MavenPublication) {
             from components.java
         }
     }
