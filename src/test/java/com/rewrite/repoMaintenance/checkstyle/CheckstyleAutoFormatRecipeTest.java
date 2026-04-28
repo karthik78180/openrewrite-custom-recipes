@@ -231,6 +231,60 @@ class CheckstyleAutoFormatRecipeTest implements RewriteTest {
     }
 
     @Test
+    void equalsAvoidsNullSwapsLiteralOrder() {
+        rewriteRun(
+                java(
+                        """
+                        package com.example;
+                        public class A {
+                          public boolean m(String s) {
+                            return s.equals("foo");
+                          }
+                        }
+                        """,
+                        // EqualsAvoidsNull rewrites s.equals("foo") to "foo".equals(s) so a null
+                        // receiver no longer NPEs. AutoFormat reformats indentation to 4 spaces and
+                        // adds a blank line after package; EmptyNewlineAtEndOfFile adds trailing \n.
+                        """
+                        package com.example;
+
+                        public class A {
+                            public boolean m(String s) {
+                                return "foo".equals(s);
+                            }
+                        }
+
+                        """
+                )
+        );
+    }
+
+    @Test
+    void cStyleArrayDeclarationConvertedToJavaStyle() {
+        rewriteRun(
+                java(
+                        """
+                        package com.example;
+                        public class A {
+                          public int x[] = new int[]{1, 2};
+                        }
+                        """,
+                        // UseJavaStyleArrayDeclarations moves the brackets from the variable name
+                        // to the type, leaving a residual space ("public  int[]") that AutoFormat
+                        // does not collapse. The double space is the recipe's actual output today.
+                        """
+                        package com.example;
+
+                        public class A {
+                            public  int[] x = new int[]{1, 2};
+                        }
+
+                        """
+                )
+        );
+    }
+
+    @Test
     void alreadyFormattedFileIsNoOp() {
         rewriteRun(
                 java(

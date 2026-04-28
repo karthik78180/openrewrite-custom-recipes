@@ -100,6 +100,52 @@ class UpgradeProjectDependenciesRecipeTest implements RewriteTest {
     }
 
     @Test
+    void springCoreUpgradeInBuildGradle() {
+        rewriteRun(
+                buildGradle(
+                        """
+                        plugins { id 'java' }
+                        repositories { mavenCentral() }
+                        dependencies {
+                            implementation 'org.springframework:spring-core:6.0.0'
+                        }
+                        """,
+                        """
+                        plugins { id 'java' }
+                        repositories { mavenCentral() }
+                        dependencies {
+                            implementation 'org.springframework:spring-core:6.2.0'
+                        }
+                        """
+                )
+        );
+    }
+
+    @Test
+    void multipleDependenciesUpgradedTogether() {
+        rewriteRun(
+                buildGradle(
+                        """
+                        plugins { id 'java' }
+                        repositories { mavenCentral() }
+                        dependencies {
+                            implementation 'io.vertx:vertx-core:3.9.16'
+                            implementation 'org.springframework:spring-core:6.0.0'
+                        }
+                        """,
+                        """
+                        plugins { id 'java' }
+                        repositories { mavenCentral() }
+                        dependencies {
+                            implementation 'io.vertx:vertx-core:5.0.5'
+                            implementation 'org.springframework:spring-core:6.2.0'
+                        }
+                        """
+                )
+        );
+    }
+
+    @Test
     void noOpWhenAlreadyAtTargetVersion() {
         rewriteRun(
                 buildGradle(
