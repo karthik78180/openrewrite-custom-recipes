@@ -13,7 +13,9 @@ junit-platform-launcher = { module = "org.junit.platform:junit-platform-launcher
 openrewrite-bom = { module = "org.openrewrite:rewrite-bom", version.ref = "openrewrite-bom" }
 openrewrite-java = { module = "org.openrewrite:rewrite-java" }
 openrewrite-gradle = { module = "org.openrewrite:rewrite-gradle" }
+openrewrite-yaml = { module = "org.openrewrite:rewrite-yaml" }
 openrewrite-java21 = { module = "org.openrewrite:rewrite-java-25" }
+openrewrite-migrate-java = { module = "org.openrewrite.recipe:rewrite-migrate-java", version = "3.34.0" }
 openrewrite-test = { module = "org.openrewrite:rewrite-test" }
 assertj-core = { module = "org.assertj:assertj-core", version.ref = "assertj-core" }
 

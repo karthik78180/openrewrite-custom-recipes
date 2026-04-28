@@ -1,5 +1,22 @@
 ---
 type: specs.openrewrite.org/v1beta/recipe
+name: com.recipies.yaml.UpgradeToJava25
+displayName: Upgrade build to Java 25 and bump workflow javaVersion
+description: >-
+  Upgrades JVM toolchain and source/target compatibility to Java 25 in Gradle (Groovy and Kotlin DSL)
+  and Maven build files. Honors the rewrite-migrate-java module-level Kotlin preconditions
+  (UpgradeBuildToJava25 + UpgradeBuildToJava25ForKotlin). Also updates the `javaVersion` key from
+  21 to 25 in GitHub Actions workflow YAML files under .github/workflows/.
+recipeList:
+  - org.openrewrite.java.migrate.UpgradeBuildToJava25
+  - org.openrewrite.java.migrate.UpgradeBuildToJava25ForKotlin
+  - org.openrewrite.yaml.ChangePropertyValue:
+      propertyKey: "**.javaVersion"
+      newValue: "25"
+      oldValue: "21"
+      filePattern: "**/.github/workflows/*.yml"
+---
+type: specs.openrewrite.org/v1beta/recipe
 name: com.recipies.yaml.AllMigrations
 displayName: Upgrade Gradle to 8.14 and Apply Custom Recipes with Checkstyle Formatting
 description: Comprehensive migration combining Gradle upgrade (8.13), base class transformations, constant updates, Vert.x JDBC migration (3.9.16 to 5.0.5), and Checkstyle-compliant formatting.

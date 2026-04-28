@@ -1,0 +1,121 @@
+1. I have a json file in config/{somename}/lambda.json root of repo if it is single module. if it is monorepo it will be in root/{module}/config/{}/lambda.json.
+I want to first update json key value with new value. use https://docs.openrewrite.org/recipes/json/changevalue
+Also I want to delete functionVersion and version keys from lambda.json file if they exists. use https://docs.openrewrite.org/recipes/json/deletekey
+
+2. update build.gradle versions
+I want to create or use any existing openrewrite recipie, that will update dependency/plugin versions
+I can have the dependency versions declared in build.gradle or in settings.gradle gradle.ext or in toml file. based on dependency i need to update the version.
+3. checkstyle add custom recipie to autoformat code as per below checkstyle. I do not want checkstyle file added to target repo as it is bought in from my gradle plugin. i'm ok to add checkstyle xml before running this recipie and deleting after running this recipie but  ineed to make sure it is removed
+
+<?xml version="1.0"?>
+<!DOCTYPE module PUBLIC
+  "-//Checkstyle//DTD Checkstyle Configuration 1.3//EN"
+  "https://checkstyle.org/dtds/configuration_1_3.dtd">
+
+<module name="Checker">
+    <property name="cacheFile" value="${checkstyle.cache.file}"/>
+
+    <module name="NewlineAtEndOfFile">
+        <property name="lineSeparator" value="lf"/>
+    </module>
+
+    <module name="FileLength"/>
+    <module name="FileTabCharacter"/>
+
+    <!-- Trailing Whitespace -->
+    <module name="RegexpSingleline">
+        <property name="format" value="\s+$"/>
+        <property name="message" value="Line has trailing spaces."/>
+    </module>
+
+    <module name="RegexpMultiline">
+        <property name="message" value="Multiple empty lines after this line."/>
+        <property name="format" value="[\r]?\n\s*[\r]?\n\s*[\r]?\n"/>
+        <property name="fileExtensions" value="java"/>
+    </module>
+
+    <!-- Checks for Size Violations -->
+    <module name="LineLength">
+        <property name="max" value="120"/>
+        <property name="ignorePattern" value="^.*https?://\S+.*$"/>
+    </module>
+
+    <module name="TreeWalker">
+        <!-- Checks for Naming Conventions -->
+        <module name="ConstantName">
+            <property name="format" value="^[A-Z][A-Z0-9]*(_[A-Z0-9]+)*$"/>
+        </module>
+        <module name="LocalFinalVariableName"/>
+        <module name="LocalVariableName"/>
+        <module name="MemberName"/>
+        <module name="MethodName"/>
+        <module name="ParameterName"/>
+        <module name="StaticVariableName"/>
+        <module name="TypeName"/>
+
+        <!-- Checks for Imports -->
+        <module name="IllegalImport"/>
+        <module name="ImportOrder">
+            <property name="groups" value="*,javax,java"/>
+            <property name="separated" value="true"/>
+            <property name="option" value="bottom"/>
+            <property name="separatedStaticGroups" value="true"/>
+            <property name="sortStaticImportsAlphabetically" value="true"/>
+        </module>
+        <module name="RedundantImport"/>
+        <module name="UnusedImports">
+            <property name="processJavadoc" value="true"/>
+        </module>
+
+        <!-- Checks for Whitespace -->
+        <module name="GenericWhitespace"/>
+        <module name="EmptyForIteratorPad"/>
+        <module name="MethodParamPad"/>
+        <module name="NoWhitespaceAfter"/>
+        <module name="NoWhitespaceBefore"/>
+        <module name="OperatorWrap"/>
+        <module name="ParenPad"/>
+        <module name="TypecastParenPad"/>
+        <module name="WhitespaceAfter"/>
+        <module name="WhitespaceAround"/>
+        <module name="EmptyLineSeparator">
+            <property name="allowMultipleEmptyLines" value="false"/>
+            <property name="allowNoEmptyLineBetweenFields" value="true"/>
+        </module>
+        <module name="SingleSpaceSeparator"/>
+
+        <!-- Modifier Checks -->
+        <module name="ModifierOrder"/>
+        <module name="RedundantModifier"/>
+
+        <!-- Checks for blocks (curly braces) -->
+        <module name="LeftCurly"/>
+        <module name="RightCurly"/>
+
+        <!-- Checks for common coding problems -->
+        <module name="CovariantEquals"/>
+        <module name="EmptyStatement"/>
+        <module name="EqualsAvoidNull"/>
+        <module name="EqualsHashCode"/>
+        <module name="IllegalInstantiation"/>
+        <module name="MissingSwitchDefault"/>
+        <module name="SimplifyBooleanExpression"/>
+        <module name="SimplifyBooleanReturn"/>
+
+        <!-- Checks for Class Design -->
+        <module name="InterfaceIsType"/>
+
+        <!-- Miscellaneous Other Checks -->
+        <module name="ArrayTypeStyle"/>
+        <module name="Indentation">
+            <property name="basicOffset" value="2"/>
+            <property name="caseIndent" value="2"/>
+            <property name="lineWrappingIndentation" value="2"/>
+        </module>
+
+        <!-- Annotations Style -->
+        <module name="AnnotationLocation">
+            <property name="allowSamelineSingleParameterlessAnnotation" value="false"/>
+        </module>
+    </module>
+</module>

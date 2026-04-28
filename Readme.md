@@ -87,7 +87,15 @@ The recipe was built by analyzing the [Vert.x 4 Migration Guide](https://vertx.i
 
 The recipe automates these transformations using OpenRewrite's AST-based code transformation capabilities.
 
-### 6. **Java21MigrationRecipes**
+### 6. **UpgradeToJava25Recipe**
+Upgrades a target project to Java 25. Updates JVM toolchain, `sourceCompatibility`, and `targetCompatibility` in Gradle (Groovy and Kotlin DSL) and Maven build files, and updates `javaVersion: '21'` to `javaVersion: '25'` in GitHub Actions workflow YAML.
+
+- **File**: `com.rewrite.jdk25Upgrade.UpgradeToJava25Recipe` (Java)
+- **YAML alternative**: `com.recipies.yaml.UpgradeToJava25` (uses `UpgradeBuildToJava25` + `UpgradeBuildToJava25ForKotlin` preconditioned variants)
+- **Test**: `UpgradeToJava25RecipeTest`
+- **Documentation**: [`docs/UpgradeToJava25Recipe.md`](docs/UpgradeToJava25Recipe.md)
+
+### 7. **Java21MigrationRecipes**
 This is a composite recipe that combines all the above recipes into a single migration process. Use this recipe to apply all migrations at once.
 
 - **File**: `Java21MigrationRecipes`

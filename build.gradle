@@ -23,6 +23,8 @@ dependencies {
     implementation platform(libs.openrewrite.bom)
     implementation libs.openrewrite.java
     implementation libs.openrewrite.gradle
+    implementation libs.openrewrite.yaml
+    implementation libs.openrewrite.migrate.java
 
     testImplementation libs.openrewrite.test
     testImplementation libs.junit.jupiter.api
