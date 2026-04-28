@@ -13,9 +13,9 @@ repositories {
 
 // Java toolchain for Gradle 9+
 java {
-    sourceCompatibility = JavaVersion.VERSION_21
+    sourceCompatibility = JavaVersion.VERSION_25
     toolchain {
-        languageVersion = JavaLanguageVersion.of(21)
+        languageVersion = JavaLanguageVersion.of(25)
     }
 }
 
@@ -30,8 +30,8 @@ dependencies {
     testRuntimeOnly libs.junit.platform.launcher
     testImplementation libs.openrewrite.java21
     testImplementation libs.openrewrite.gradle
-    testImplementation libs.groovy.all
     testImplementation libs.assertj.core
+    testRuntimeOnly gradleApi()
 }
 
 // Publish to local Maven repository (~/.m2)
