@@ -56,33 +56,34 @@ GAVS="$(
 
 [ -z "$GAVS" ] && exit 0
 
-MISSING=""
-while IFS= read -r gav; do
-  [ -z "$gav" ] && continue
-  GROUP="${gav%%:*}"
-  REST="${gav#*:}"
-  ARTIFACT="${REST%%:*}"
-  VERSION="${REST#*:}"
-  [ -z "$GROUP" ] || [ -z "$ARTIFACT" ] || [ -z "$VERSION" ] && continue
-
-  # group dots become path slashes
-  GROUP_PATH="${GROUP//.//}"
-  URL="https://repo1.maven.org/maven2/${GROUP_PATH}/${ARTIFACT}/${VERSION}/${ARTIFACT}-${VERSION}.pom"
-
-  # HEAD with 5s timeout. -I = HEAD; -o /dev/null discards body. -w prints status code.
-  STATUS="$(curl -sS -I -o /dev/null -w "%{http_code}" --max-time 5 "$URL" 2>/dev/null)"
-
-  case "$STATUS" in
-    200) ;;            # found, ok
-    404) MISSING="${MISSING}${gav}"$'\n' ;;
-    *)   ;;            # network failure / timeout / 5xx — allow, don't block
-  esac
-done <<<"$GAVS"
+# Probe each GAV in parallel — sequential lookups dominate wall time when several
+# dependencies change at once. xargs -P fans out HEAD requests with bounded concurrency.
+# NUL-delimited input + -n 1 hands each GAV to the worker as a positional argument
+# ($1), so no part of the candidate content is ever interpolated into a shell command
+# string — defense-in-depth even though the regex above already strips metacharacters.
+# Each worker prints the GAV iff Maven Central returns 404; anything else (200, network
+# failure, timeout, 5xx) is allowed silently.
+MISSING="$(
+  printf '%s' "$GAVS" | tr '\n' '\0' \
+  | xargs -0 -P 8 -n 1 bash -c '
+      gav="$1"
+      [ -z "$gav" ] && exit 0
+      group="${gav%%:*}"
+      rest="${gav#*:}"
+      artifact="${rest%%:*}"
+      version="${rest#*:}"
+      group_path="${group//.//}"
+      url="https://repo1.maven.org/maven2/${group_path}/${artifact}/${version}/${artifact}-${version}.pom"
+      status="$(curl -sS -I -o /dev/null -w "%{http_code}" --max-time 5 "$url" 2>/dev/null)"
+      [ "$status" = "404" ] && printf "%s\n" "$gav"
+      exit 0
+    ' _
+)"
 
 if [ -n "$MISSING" ]; then
   {
     echo "Maven Central does not have these dependencies referenced in $FILE_PATH:"
-    printf '%s' "$MISSING" | sed 's/^/  - /'
+    printf '%s\n' "$MISSING" | sed 's/^/  - /'
     echo
     echo "Verify the group:artifact:version exists on https://search.maven.org/ before committing."
     echo "If this is a private/internal artifact, the user can override by accepting the edit."
