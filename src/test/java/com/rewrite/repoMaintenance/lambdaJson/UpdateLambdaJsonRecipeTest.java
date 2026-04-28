@@ -130,6 +130,80 @@ class UpdateLambdaJsonRecipeTest implements RewriteTest {
     }
 
     @Test
+    void partialUpdateOnlyTouchesIncorrectKeys() {
+        rewriteRun(
+                json(
+                        """
+                        {
+                          "runtime": "java25",
+                          "handler": "old.Handler",
+                          "deploymentCordinates": {
+                            "region": "us-east-1"
+                          }
+                        }
+                        """,
+                        """
+                        {
+                          "runtime": "java25",
+                          "handler": "com.example.Handler",
+                          "deploymentCordinates": {
+                            "region": "us-east-1"
+                          }
+                        }
+                        """,
+                        spec -> spec.path("config/myfunc/lambda.json")
+                )
+        );
+    }
+
+    @Test
+    void deletesOnlyVersionWhenFunctionVersionAbsent() {
+        rewriteRun(
+                json(
+                        """
+                        {
+                          "runtime": "nodejs18.x",
+                          "version": "1.2",
+                          "handler": "old.Handler"
+                        }
+                        """,
+                        """
+                        {
+                          "runtime": "java25",
+                          "handler": "com.example.Handler"
+                        }
+                        """,
+                        spec -> spec.path("config/myfunc/lambda.json")
+                )
+        );
+    }
+
+    @Test
+    void preservesUnrelatedTopLevelKeys() {
+        rewriteRun(
+                json(
+                        """
+                        {
+                          "runtime": "nodejs18.x",
+                          "handler": "old.Handler",
+                          "memory": 512,
+                          "timeout": 30
+                        }
+                        """,
+                        """
+                        {
+                          "runtime": "java25",
+                          "handler": "com.example.Handler",
+                          "memory": 512,
+                          "timeout": 30
+                        }
+                        """,
+                        spec -> spec.path("config/myfunc/lambda.json")
+                )
+        );
+    }
+
+    @Test
     void recipeMetadataAndCompositeSize() {
         UpdateLambdaJsonRecipe recipe = new UpdateLambdaJsonRecipe();
         assertThat(recipe.getDisplayName()).isNotBlank();
