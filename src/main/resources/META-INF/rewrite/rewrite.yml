@@ -97,3 +97,13 @@ recipeList:
       sortStaticImportsAlphabetically: true
       removeUnusedImports: true
       removeUnusedNamedImports: true
+---
+type: specs.openrewrite.org/v1beta/recipe
+name: com.recipies.yaml.PostJava25Upgrade
+displayName: Java 25 upgrade + repo maintenance
+description: Bundles the JDK 25 upgrade with lambda.json updates, dependency bumps, and Checkstyle autoformat.
+recipeList:
+  - com.recipies.yaml.UpgradeToJava25
+  - com.rewrite.repoMaintenance.lambdaJson.UpdateLambdaJsonRecipe
+  - com.rewrite.repoMaintenance.dependencies.UpgradeProjectDependenciesRecipe
+  - com.rewrite.repoMaintenance.checkstyle.CheckstyleAutoFormatRecipe
