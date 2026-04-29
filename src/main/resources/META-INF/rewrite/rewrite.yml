@@ -1,12 +1,13 @@
 ---
 type: specs.openrewrite.org/v1beta/recipe
 name: com.recipies.yaml.UpgradeToJava25
-displayName: Upgrade build to Java 25 and bump workflow javaVersion
+displayName: Upgrade build to Java 25, bump workflow javaVersion, upgrade Gradle wrapper and project dependencies
 description: >-
   Upgrades JVM toolchain and source/target compatibility to Java 25 in Gradle (Groovy and Kotlin DSL)
   and Maven build files. Honors the rewrite-migrate-java module-level Kotlin preconditions
-  (UpgradeBuildToJava25 + UpgradeBuildToJava25ForKotlin). Also updates the `javaVersion` key from
-  21 to 25 in GitHub Actions workflow YAML files under .github/workflows/.
+  (UpgradeBuildToJava25 + UpgradeBuildToJava25ForKotlin). Updates the `javaVersion` key from
+  21 to 25 in GitHub Actions workflow YAML files under .github/workflows/. Bumps the Gradle wrapper
+  to 9.4.1 and upgrades declared dependency and plugin versions (mirrors UpgradeProjectDependenciesRecipe).
 recipeList:
   - org.openrewrite.java.migrate.UpgradeBuildToJava25
   - org.openrewrite.java.migrate.UpgradeBuildToJava25ForKotlin
@@ -15,6 +16,23 @@ recipeList:
       newValue: "25"
       oldValue: "21"
       filePattern: "**/.github/workflows/*.yml"
+  - org.openrewrite.gradle.UpdateGradleWrapper:
+      version: "9.4.1"
+      distributionType: "bin"
+      distributionUrl: "https://services.gradle.org/distributions/gradle-9.4.1-bin.zip"
+      distributionSha256Sum: "2ab2958f2a1e51120c326cad6f385153bb11ee93b3c216c5fccebfdfbb7ec6cb"
+      archivePathPattern: "wrapper/dists"
+  - org.openrewrite.gradle.UpgradeDependencyVersion:
+      groupId: io.vertx
+      artifactId: vertx-core
+      newVersion: 5.0.5
+  - org.openrewrite.gradle.UpgradeDependencyVersion:
+      groupId: org.springframework
+      artifactId: spring-core
+      newVersion: 6.2.0
+  - org.openrewrite.gradle.plugins.UpgradePluginVersion:
+      pluginIdPattern: org.springframework.boot
+      newVersion: 3.4.0
 ---
 type: specs.openrewrite.org/v1beta/recipe
 name: com.recipies.yaml.AllMigrations
