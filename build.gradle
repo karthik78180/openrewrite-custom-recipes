@@ -1,5 +1,5 @@
 plugins {
-    id 'java'
+    id 'java-library'
     id 'maven-publish'
     alias libs.plugins.openrewrite
 }
@@ -11,50 +11,25 @@ repositories {
     mavenCentral()
 }
 
-// Java toolchain for Gradle 9+
-java {
-    sourceCompatibility = JavaVersion.VERSION_25
-    toolchain {
-        languageVersion = JavaLanguageVersion.of(25)
-    }
-}
-
-dependencies {
-    constraints {
-        implementation(libs.jackson.core)
-    }
-
-    implementation platform("org.openrewrite:rewrite-bom:${libs.versions.openrewrite.bom.get()}")
-    implementation libs.openrewrite.java
-    implementation libs.openrewrite.gradle
-    implementation libs.openrewrite.yaml
-    implementation libs.openrewrite.migrate.java
-    implementation libs.openrewrite.static.analysis
-    implementation libs.openrewrite.json
-
-    testImplementation libs.openrewrite.test
-    testImplementation libs.junit.jupiter.api
-    testRuntimeOnly libs.junit.jupiter.engine
-    testRuntimeOnly libs.junit.platform.launcher
-    testImplementation libs.openrewrite.java21
-    testImplementation libs.openrewrite.gradle
-    testImplementation libs.assertj.core
-    testRuntimeOnly gradleApi()
+// Pure YAML recipe — no Java code, just resources
+jar {
+    duplicatesStrategy = 'exclude'
 }
 
 // Publish to local Maven repository (~/.m2)
 publishing {
     publications {
-        create("mavenJava", MavenPublication) {
-            from components.java
+        create("mavenYaml", MavenPublication) {
+            artifact jar
+            pom {
+                name = 'OpenRewrite Custom Recipes (YAML-only)'
+                description = 'YAML-based OpenRewrite recipes'
+                url = 'https://github.com/yourusername/openrewrite-custom-recipes'
+            }
         }
     }
     repositories {
         mavenLocal()
     }
-}
-
-test {
-    useJUnitPlatform()
 }
 
