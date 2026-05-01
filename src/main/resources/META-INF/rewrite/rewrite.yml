@@ -125,3 +125,15 @@ recipeList:
   - com.rewrite.repoMaintenance.lambdaJson.UpdateLambdaJsonRecipe
   - com.rewrite.repoMaintenance.dependencies.UpgradeProjectDependenciesRecipe
   - com.rewrite.repoMaintenance.checkstyle.CheckstyleAutoFormatRecipe
+---
+type: specs.openrewrite.org/v1beta/recipe
+name: com.recipies.yaml.SetupJavaVersionTo25
+displayName: Set GitHub Actions setup-java java-version to 25
+description: >-
+  Updates the java-version key in actions/setup-java steps inside GitHub Actions
+  workflow files to 25, regardless of the current value.
+recipeList:
+  - org.openrewrite.yaml.ChangePropertyValue:
+      propertyKey: "**.java-version"
+      newValue: "25"
+      filePattern: "**/.github/workflows/*.yml"
